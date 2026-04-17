@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.env
+.DS_Store
+*.log
+coverage/
+.idea/
+.vscode/
+/kovia-api/node_modules/
+/kovia-form/node_modules/

@@ -1,0 +1,89 @@
+/* ========================================
+   KOVIA API — controllers/form.public.controller.js
+   Endpoints públicos: llenado del formulario.
+
+   Rutas:
+     GET  /api/forms/:slug          → getForm
+     POST /api/forms/:slug/submit   → submit
+   ======================================== */
+'use strict';
+
+const service = require('../services/form.service');
+const R       = require('../utils/response');
+
+/**
+ * GET /api/forms/:slug
+ * Retorna la config completa del formulario para que el FE lo renderice.
+ * 404 si el slug no existe o el formulario está inactivo.
+ */
+async function getForm(req, res, next) {
+  try {
+    const form = await service.getFormBySlug(req.params.slug);
+
+    if (!form) {
+      return R.error(res, 404, 'Formulario no encontrado o no disponible');
+    }
+
+    return R.success(res, 200, 'Formulario obtenido correctamente', {
+      id:        form.id,
+      title:     form.title,
+      slug:      form.slug,
+      template:  form.template ?? null,
+      config:    form.config,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/forms/:slug/submit
+ * Recibe { answers: { "q1": "...", "q2": [...] } }
+ * Valida preguntas required y guarda la submission.
+ */
+async function submit(req, res, next) {
+  try {
+    const form = await service.getFormBySlug(req.params.slug);
+
+    if (!form) {
+      return R.error(res, 404, 'Formulario no encontrado o no disponible');
+    }
+
+    const answers = req.body?.answers;
+
+    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+      return R.error(res, 422, 'El campo "answers" es requerido y debe ser un objeto');
+    }
+
+    const { submission, warnings } = await service.submitForm(form, answers, req);
+
+    if (warnings.length > 0) {
+      return R.warning(res, 201, 'Formulario enviado con advertencias', {
+        id:         submission.id,
+        created_at: submission.created_at,
+      }, warnings);
+    }
+
+    return R.success(res, 201, 'Formulario enviado correctamente', {
+      id:         submission.id,
+      created_at: submission.created_at,
+    });
+  } catch (err) {
+    // Error de validación de required desde el service
+    if (err.statusCode === 422 && err.missingFields) {
+      return R.error(res, 422, err.message, {
+        missingFields: err.missingFields,
+      });
+    }
+
+    if (err.statusCode === 422 && err.fieldErrors) {
+      return R.error(res, 422, err.message, {
+        fieldErrors: err.fieldErrors,
+      });
+    }
+
+    next(err);
+  }
+}
+
+module.exports = { getForm, submit };
