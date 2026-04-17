@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" class="dark" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <script>
+      (() => {
+        try {
+          const key = 'kovia-admin-theme';
+          const stored = String(localStorage.getItem(key) || '').toLowerCase();
+          const resolved = stored === 'light' ? 'light' : 'dark';
+          const root = document.documentElement;
+
+          root.classList.remove('light', 'dark');
+          root.classList.add(resolved);
+          root.setAttribute('data-theme', resolved);
+          root.style.colorScheme = resolved;
+        } catch {
+          // Keep dark mode as safe fallback.
+        }
+      })();
+    </script>
+    <title>Kovia Admin</title>
+  </head>
+  <body class="bg-background text-foreground">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

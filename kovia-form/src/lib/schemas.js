@@ -8,8 +8,7 @@ export const step1Schema = z.object({
   responsable_nombre: z.string().min(2, 'El nombre del responsable es obligatorio'),
   whatsapp: z
     .string()
-    .min(7, 'Ingresa un número de WhatsApp válido')
-    .regex(/^[+\d\s\-()]{7,20}$/, 'Formato inválido. Ej: +503 7777 1234'),
+    .refine((value) => isValidPhoneValue(value), 'Ingresa un número de WhatsApp válido (8 dígitos)'),
   descripcion_negocio: z.string().min(10, 'Describe brevemente tu negocio (mín. 10 caracteres)'),
   tiempo_operando: z.enum(
     ['Menos de 6 meses', '6 meses–1 año', '1–3 años', 'Más de 3 años'],
@@ -111,6 +110,126 @@ export const stepSchemas = {
   7: step7Schema,
 };
 
+const FIELD_TYPE_ALIASES = Object.freeze({
+  tel: 'telefono',
+  phone: 'telefono',
+  datetime: 'date-time',
+  date_time: 'date-time',
+});
+
+function normalizeFieldType(type) {
+  const rawType = String(type || '').trim().toLowerCase();
+  return FIELD_TYPE_ALIASES[rawType] || rawType || 'text';
+}
+
+function isDigitsOnly(value) {
+  if (typeof value !== 'string' || value.length === 0) return false;
+
+  for (const char of value) {
+    if (char < '0' || char > '9') return false;
+  }
+
+  return true;
+}
+
+function isValidDateParts(year, month, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+  );
+}
+
+function isValidMaskedDate(value) {
+  if (typeof value !== 'string') return false;
+
+  const parts = value.trim().split('-');
+  if (parts.length !== 3) return false;
+
+  const [yearToken, monthToken, dayToken] = parts;
+  if (!isDigitsOnly(yearToken) || !isDigitsOnly(monthToken) || !isDigitsOnly(dayToken)) return false;
+
+  return isValidDateParts(Number(yearToken), Number(monthToken), Number(dayToken));
+}
+
+function isValidMaskedDateTime(value) {
+  if (typeof value !== 'string') return false;
+
+  const [dateToken, timeToken] = value.trim().split(' ');
+  if (!dateToken || !timeToken) return false;
+  if (!isValidMaskedDate(dateToken)) return false;
+
+  const timeParts = timeToken.split(':');
+  if (timeParts.length !== 2) return false;
+
+  const [hoursToken, minutesToken] = timeParts;
+  if (!isDigitsOnly(hoursToken) || !isDigitsOnly(minutesToken)) return false;
+
+  const hours = Number(hoursToken);
+  const minutes = Number(minutesToken);
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+}
+
+function parsePriceValue(rawValue) {
+  if (rawValue === undefined || rawValue === null) return null;
+
+  const source = String(rawValue).trim();
+  if (!source) return null;
+
+  let candidate = '';
+  for (const char of source) {
+    const isDigit = char >= '0' && char <= '9';
+    if (isDigit || char === '.' || char === ',') {
+      candidate += char;
+    }
+  }
+
+  if (!candidate) return null;
+
+  const lastDot = candidate.lastIndexOf('.');
+  const lastComma = candidate.lastIndexOf(',');
+  const decimalIndex = Math.max(lastDot, lastComma);
+
+  let integerDigits = '';
+  let fractionDigits = '';
+
+  for (let index = 0; index < candidate.length; index += 1) {
+    const char = candidate[index];
+    const isDigit = char >= '0' && char <= '9';
+    if (!isDigit) continue;
+
+    if (decimalIndex !== -1 && index > decimalIndex) {
+      fractionDigits += char;
+    } else {
+      integerDigits += char;
+    }
+  }
+
+  if (!integerDigits && !fractionDigits) return null;
+
+  const normalized = fractionDigits
+    ? `${integerDigits || '0'}.${fractionDigits}`
+    : (integerDigits || '0');
+
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function isValidPhoneValue(value) {
+  if (typeof value !== 'string') return false;
+
+  let digits = 0;
+  for (const char of value) {
+    if (char >= '0' && char <= '9') digits += 1;
+  }
+
+  return digits === 8;
+}
+
 function applyDynamicZRule(schema, rule) {
   if (!rule || typeof rule !== 'object') return schema;
 
@@ -145,6 +264,20 @@ function applyDynamicZRule(schema, rule) {
         return schema.email(rule.message || 'Correo invalido');
       }
       return schema;
+    case 'minValue':
+      return schema.refine((value) => {
+        if (value === '' || value == null) return true;
+        const parsedValue = parsePriceValue(value);
+        if (parsedValue === null) return false;
+        return parsedValue >= Number(rule.value);
+      }, { message: rule.message || `El valor minimo permitido es ${rule.value}` });
+    case 'maxValue':
+      return schema.refine((value) => {
+        if (value === '' || value == null) return true;
+        const parsedValue = parsePriceValue(value);
+        if (parsedValue === null) return false;
+        return parsedValue <= Number(rule.value);
+      }, { message: rule.message || `El valor maximo permitido es ${rule.value}` });
     case 'enum':
       if (!Array.isArray(rule.options) || rule.options.length === 0) return schema;
       return schema.refine(
@@ -157,11 +290,29 @@ function applyDynamicZRule(schema, rule) {
 }
 
 function buildFieldSchema(question) {
-  const fieldType = question?.type;
+  const fieldType = normalizeFieldType(question?.type);
   let schema;
 
   if (fieldType === 'checkbox') {
     schema = z.array(z.string());
+  } else if (fieldType === 'email') {
+    schema = z.string().email('Ingresa un correo electronico valido');
+  } else if (fieldType === 'telefono') {
+    schema = z.string().refine((value) => isValidPhoneValue(value), {
+      message: 'Ingresa un telefono valido',
+    });
+  } else if (fieldType === 'date') {
+    schema = z.string().refine((value) => isValidMaskedDate(value), {
+      message: 'Ingresa una fecha valida (YYYY-MM-DD)',
+    });
+  } else if (fieldType === 'date-time') {
+    schema = z.string().refine((value) => isValidMaskedDateTime(value), {
+      message: 'Ingresa una fecha y hora valida (YYYY-MM-DD HH:mm)',
+    });
+  } else if (fieldType === 'price') {
+    schema = z.string().refine((value) => parsePriceValue(value) !== null, {
+      message: 'Ingresa un monto valido',
+    });
   } else {
     schema = z.string();
   }

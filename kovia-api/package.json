@@ -5,16 +5,19 @@
   "main": "src/server.js",
   "scripts": {
     "migrate": "node src/migrations/run.js",
-    "seed:forms": "node src/seeds/run.js",
+    "seed": "node src/seeds/run.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.3.2",
     "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.9.7",
     "pg": "^8.20.0",
     "pg-hstore": "^2.3.4",

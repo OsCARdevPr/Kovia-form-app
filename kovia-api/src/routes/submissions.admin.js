@@ -14,4 +14,7 @@ router.use(auth);
 // GET /api/admin/submissions/:id
 router.get('/:id', controller.getSubmissionById);
 
+// POST /api/admin/submissions/:id/reactivate
+router.post('/:id/reactivate', controller.reactivateSubmissionLock);
+
 module.exports = router;

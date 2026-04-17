@@ -9,9 +9,11 @@
 const FormTemplate  = require('./FormTemplate');
 const Form          = require('./Form');
 const FormSubmission = require('./FormSubmission');
+const User          = require('./User');
 
 module.exports = {
   FormTemplate,
   Form,
   FormSubmission,
+  User,
 };

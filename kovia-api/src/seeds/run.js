@@ -5,6 +5,7 @@ const FormTemplate = require('../models/FormTemplate');
 const Form = require('../models/Form');
 const { discoveryTemplate, discoveryFormConfig } = require('./seed-data/discovery-form-config');
 
+
 async function seedDiscoveryForm() {
   const [template] = await FormTemplate.findOrCreate({
     where: { slug: discoveryTemplate.slug },
@@ -70,5 +71,5 @@ if (require.main === module) {
 
 module.exports = {
   runSeeds,
-  seedDiscoveryForm,
+  seedDiscoveryForm
 };

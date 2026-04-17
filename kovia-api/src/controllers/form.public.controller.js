@@ -82,6 +82,14 @@ async function submit(req, res, next) {
       });
     }
 
+    if (err.statusCode === 409) {
+      return R.error(res, 409, err.message, {
+        code: err.code || 'FORM_ALREADY_SUBMITTED',
+        reactivationRequired: err.reactivationRequired === true,
+        lock: err.lock || null,
+      });
+    }
+
     next(err);
   }
 }

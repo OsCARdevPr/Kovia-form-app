@@ -30,7 +30,7 @@ export default function ProgressBar({ currentStep, totalSteps, labels }) {
               data-step={stepNum}
             >
               <div className="step-dot-circle" />
-              <span className="step-dot-label">{label}</span>
+              <span className="step-dot-label"></span>
             </div>
           );
         })}

@@ -10,9 +10,11 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const R = require('./utils/response');
 const sequelize = require('./config/database');
 const { runMigrations } = require('./migrations/run');
+const { ensureDefaultAdminUser } = require('./services/auth.service');
 
 // Importar modelos — el barrel garantiza asociaciones y sync de todos
 require('./models/index');
@@ -21,6 +23,7 @@ require('./models/index');
 const formsPublicRouter      = require('./routes/forms.public');      // Público: llenado
 const formsAdminRouter       = require('./routes/forms.admin');       // Admin: CRUD forms
 const submissionsAdminRouter = require('./routes/submissions.admin'); // Admin: detalle submission
+const authRouter             = require('./routes/auth');              // Auth admin
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,11 +46,19 @@ const aiRateLimiter = rateLimit({
 app.use(aiRateLimiter);
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(null, false);
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Form-Identifier'],
 }));
 
+app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -60,6 +71,8 @@ app.get('/health', (_req, res) => {
 });
 
 // ── API Routes ────────────────────────────────────────────
+app.use('/api/auth', authRouter);
+
 // Sistema de formularios dinámicos — públicas
 app.use('/api/forms', formsPublicRouter);
 
@@ -107,11 +120,14 @@ async function startServer() {
   try {
     await runMigrations({ useTransaction: false });
     await sequelize.authenticate();
+    await ensureDefaultAdminUser();
     console.log('✅ Base de datos lista (migraciones aplicadas)');
 
     app.listen(PORT, () => {
       console.log(`🚀 Kovia API corriendo en http://localhost:${PORT}`);
       console.log(`   Health:             GET  http://localhost:${PORT}/health`);
+      console.log(`   Auth login:         POST http://localhost:${PORT}/api/auth/login`);
+      console.log(`   Auth me:            GET  http://localhost:${PORT}/api/auth/me`);
       console.log(`   Form por slug:      GET  http://localhost:${PORT}/api/forms/:slug`);
       console.log(`   Submit formulario:  POST http://localhost:${PORT}/api/forms/:slug/submit`);
       console.log(`   Admin forms:        *    http://localhost:${PORT}/api/admin/forms`);

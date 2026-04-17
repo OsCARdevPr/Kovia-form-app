@@ -1,0 +1,38 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+  font-family: 'Space Mono', monospace;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.dark body,
+[data-theme='dark'] body {
+  color: #f4f8ff;
+  background:
+    radial-gradient(circle at 10% 6%, rgba(66, 139, 255, 0.18), transparent 32%),
+    radial-gradient(circle at 92% 88%, rgba(255, 168, 93, 0.16), transparent 34%),
+    linear-gradient(145deg, #05080f 0%, #0f1624 100%);
+}
+
+.light body,
+[data-theme='light'] body {
+  color: #15233f;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(107, 164, 255, 0.22), transparent 30%),
+    radial-gradient(circle at 88% 84%, rgba(255, 184, 123, 0.22), transparent 35%),
+    linear-gradient(145deg, #eef4ff 0%, #f9fbff 100%);
+}

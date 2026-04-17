@@ -7,12 +7,16 @@ const migrations = [
   require('./001-create-form-templates'),
   require('./002-create-forms'),
   require('./003-create-form-submissions'),
+  require('./004-add-submission-lock-columns'),
+  require('./005-create-users'),
 ];
 
 const migrationNames = [
   '001-create-form-templates',
   '002-create-forms',
   '003-create-form-submissions',
+  '004-add-submission-lock-columns',
+  '005-create-users',
 ];
 
 async function ensureMigrationsTable(queryInterface, DataTypes) {

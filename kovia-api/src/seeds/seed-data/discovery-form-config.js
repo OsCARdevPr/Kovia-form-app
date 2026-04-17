@@ -9,6 +9,86 @@ const discoveryTemplate = {
 const discoveryFormConfig = {
   version: 1,
   validation_engine: 'z-rules-v1',
+  field_type_index: {
+    text: {
+      ui: 'input',
+      html_input_type: 'text',
+    },
+    textarea: {
+      ui: 'textarea',
+    },
+    radio: {
+      ui: 'radio-group',
+    },
+    checkbox: {
+      ui: 'checkbox-group',
+    },
+    select: {
+      ui: 'select',
+    },
+    telefono: {
+      ui: 'masked-input',
+      html_input_type: 'tel',
+      mask_preset: 'telefono',
+      default_placeholder: '77771234',
+      validation_preset: 'telefono',
+    },
+    email: {
+      ui: 'input',
+      html_input_type: 'email',
+      validation_preset: 'email',
+      default_placeholder: 'nombre@empresa.com',
+    },
+    date: {
+      ui: 'masked-input',
+      html_input_type: 'text',
+      mask_preset: 'date-iso',
+      validation_preset: 'date-iso',
+      default_placeholder: 'YYYY-MM-DD',
+    },
+    'date-time': {
+      ui: 'masked-input',
+      html_input_type: 'text',
+      mask_preset: 'date-time-iso',
+      validation_preset: 'date-time-iso',
+      default_placeholder: 'YYYY-MM-DD HH:mm',
+    },
+    price: {
+      ui: 'masked-input',
+      html_input_type: 'text',
+      mask_preset: 'price',
+      validation_preset: 'price',
+      default_placeholder: '0.00',
+    },
+  },
+  completion_action: {
+    type: 'embed',
+    title: 'Agenda tu reunion',
+    embed_url: 'http://calcom.oscardev.software/team/kovia-studios/agendar-cita?embed=true',
+    embed_height: 720,
+    description: 'Selecciona fecha y hora para continuar.',
+    embed_code: `<!-- Cal inline embed code begins -->
+<div style="width:100%;height:100%;overflow:scroll" id="my-cal-inline"></div>
+<script type="text/javascript">
+(function (C, A, L) { let p = function (a, ar) { a.q.push(ar); }; let d = C.document; C.Cal = C.Cal || function () { let cal = C.Cal; let ar = arguments; if (!cal.loaded) { cal.ns = {}; cal.q = cal.q || []; d.head.appendChild(d.createElement("script")).src = A; cal.loaded = true; } if (ar[0] === L) { const api = function () { p(api, arguments); }; const namespace = ar[1]; api.q = api.q || []; typeof namespace === "string" ? (cal.ns[namespace] = api) && p(api, ar) : p(cal, ar); return; } p(cal, ar); }; })(window, "http://calcom.oscardev.software/embed/embed.js", "init");
+Cal("init", {origin:"http://calcom.oscardev.software"});
+
+Cal("inline", {
+  elementOrSelector:"#my-cal-inline",
+  calLink: "team/kovia-studios/agendar-cita"
+});
+
+Cal("ui", {"styles":{"branding":{"brandColor":"#000000"}},"hideEventTypeDetails":false});
+</script>
+<!-- Cal inline embed code ends -->`,
+  },
+  submission_policy: {
+    enabled: true,
+    once_per_identifier: true,
+    identifier_strategy: 'ip_then_header',
+    identifier_header: 'x-form-identifier',
+    allow_reactivation: true,
+  },
   steps: [
     {
       order: 1,
@@ -18,6 +98,7 @@ const discoveryFormConfig = {
           id: 'negocio_nombre',
           type: 'text',
           label: 'Nombre del negocio',
+          placeholder: 'Ej: Tienda El Sol',
           required: true,
           required_message: 'El nombre del negocio es obligatorio (min. 2 caracteres)',
           validation: {
@@ -31,6 +112,7 @@ const discoveryFormConfig = {
           id: 'responsable_nombre',
           type: 'text',
           label: 'Nombre del responsable',
+          placeholder: 'Ej: Ana Martinez',
           required: true,
           required_message: 'El nombre del responsable es obligatorio',
           validation: {
@@ -42,14 +124,26 @@ const discoveryFormConfig = {
         },
         {
           id: 'whatsapp',
-          type: 'tel',
+          type: 'telefono',
           label: 'WhatsApp de contacto',
+          placeholder: '7777-1234',
           required: true,
-          required_message: 'Ingresa un numero de WhatsApp valido',
+          required_message: 'Ingresa un numero de WhatsApp valido (8 digitos)',
           validation: {
             z: [
-              { rule: 'min', value: 7, message: 'Ingresa un numero de WhatsApp valido' },
-              { rule: 'regex', pattern: '^[+\\d\\s\\-()]{7,20}$', message: 'Formato invalido. Ej: +503 7777 1234' },
+              { rule: 'min', value: 8, message: 'Ingresa un numero de WhatsApp valido (8 digitos)' },
+            ],
+          },
+        },
+        {
+          id: 'correo_contacto',
+          type: 'email',
+          label: 'Correo de contacto',
+          placeholder: 'nombre@empresa.com',
+          required: false,
+          validation: {
+            z: [
+              { rule: 'email', message: 'Ingresa un correo electronico valido' },
             ],
           },
         },
@@ -57,6 +151,7 @@ const discoveryFormConfig = {
           id: 'descripcion_negocio',
           type: 'textarea',
           label: 'A que se dedica el negocio?',
+          placeholder: 'Describe brevemente que vendes y a que tipo de cliente',
           required: true,
           required_message: 'Describe brevemente tu negocio (min. 10 caracteres)',
           validation: {
@@ -113,6 +208,7 @@ const discoveryFormConfig = {
           id: 'canales_clientes_otro',
           type: 'text',
           label: 'Cual otro canal?',
+          placeholder: 'Ej: Ferias locales',
           required: false,
           visible_when: {
             field: 'canales_clientes',
@@ -128,6 +224,7 @@ const discoveryFormConfig = {
           id: 'canal_principal',
           type: 'text',
           label: 'Cual es tu canal principal?',
+          placeholder: 'Ej: Instagram organico',
           required: true,
           validation: {
             z: [
@@ -139,6 +236,7 @@ const discoveryFormConfig = {
           id: 'accion_cliente',
           type: 'textarea',
           label: 'Que hace el cliente cuando ve tu contenido?',
+          placeholder: 'Ej: Escribe por WhatsApp para consultar precio y disponibilidad',
           required: true,
           validation: {
             z: [
@@ -162,6 +260,7 @@ const discoveryFormConfig = {
           id: 'momento_leads',
           type: 'textarea',
           label: 'En que momento llegan mas leads?',
+          placeholder: 'Ej: Entre 7:00 pm y 10:00 pm despues de publicar en TikTok',
           required: false,
           validation: {
             z: [
@@ -259,6 +358,7 @@ const discoveryFormConfig = {
           id: 'seguimiento_lead',
           type: 'textarea',
           label: 'Que pasa cuando un lead no responde?',
+          placeholder: 'Ej: Enviamos 2 recordatorios y luego cerramos la oportunidad',
           required: false,
           validation: {
             z: [
@@ -316,6 +416,7 @@ const discoveryFormConfig = {
           id: 'empresa_logistica',
           type: 'text',
           label: 'Con que empresa de logistica trabajas?',
+          placeholder: 'Ej: Cargo Expreso',
           required: true,
           validation: {
             z: [
@@ -384,6 +485,7 @@ const discoveryFormConfig = {
           id: 'herramientas_otro',
           type: 'text',
           label: 'Cual otra herramienta?',
+          placeholder: 'Ej: HubSpot',
           required: false,
           visible_when: {
             field: 'herramientas',
@@ -411,6 +513,7 @@ const discoveryFormConfig = {
           id: 'seguimiento_pedidos',
           type: 'textarea',
           label: 'Como registras y haces seguimiento de los pedidos?',
+          placeholder: 'Ej: Registramos en Google Sheets y actualizamos estado manualmente',
           required: false,
           validation: {
             z: [
@@ -440,6 +543,7 @@ const discoveryFormConfig = {
           id: 'confirmacion_pago',
           type: 'textarea',
           label: 'Como confirmas que un pedido fue pagado o liquidado?',
+          placeholder: 'Ej: Validamos comprobante y marcamos estado pagado en la hoja de control',
           required: true,
           validation: {
             z: [
@@ -451,6 +555,7 @@ const discoveryFormConfig = {
           id: 'devolucion',
           type: 'textarea',
           label: 'Que pasa cuando un pedido es devuelto?',
+          placeholder: 'Ej: Se contacta al cliente, se coordina reenvio y se registra incidencia',
           required: false,
           validation: {
             z: [
@@ -480,6 +585,7 @@ const discoveryFormConfig = {
           id: 'paso_mas_tiempo',
           type: 'textarea',
           label: 'Cual es el paso que mas tiempo te quita hoy?',
+          placeholder: 'Ej: Confirmar datos de envio en chat uno por uno',
           required: true,
           validation: {
             z: [
@@ -491,6 +597,7 @@ const discoveryFormConfig = {
           id: 'pierdes_ventas',
           type: 'textarea',
           label: 'En que momento sientes que pierdes mas ventas?',
+          placeholder: 'Ej: Cuando el cliente deja de responder despues de preguntar precio',
           required: true,
           validation: {
             z: [
@@ -502,6 +609,7 @@ const discoveryFormConfig = {
           id: 'intento_mejorar',
           type: 'textarea',
           label: 'Hay algo que ya intentaste mejorar y no funciono?',
+          placeholder: 'Ej: Probamos respuestas rapidas, pero no mejoro la conversion',
           required: false,
           validation: {
             z: [
@@ -513,6 +621,7 @@ const discoveryFormConfig = {
           id: 'algo_agregar',
           type: 'textarea',
           label: 'Algo que agregar que no te hayamos preguntado?',
+          placeholder: 'Comparte cualquier contexto adicional que ayude a entender tu proceso',
           required: false,
           validation: {
             z: [

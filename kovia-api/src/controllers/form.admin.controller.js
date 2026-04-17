@@ -176,6 +176,30 @@ async function getSubmissionById(req, res, next) {
   }
 }
 
+/**
+ * POST /api/admin/submissions/:id/reactivate
+ * Desbloquea reenvio para el identificador asociado a esta submission,
+ * pero solo dentro del formulario al que pertenece.
+ */
+async function reactivateSubmissionLock(req, res, next) {
+  try {
+    const actor = req.user?.id || req.user?.email || req.user?.name || 'admin';
+    const result = await service.reactivateSubmissionLock(req.params.id, { reactivatedBy: actor });
+
+    if (!result) {
+      return R.error(res, 404, 'Submission no encontrada');
+    }
+
+    return R.success(res, 200, 'Reenvio reactivado correctamente para este formulario', {
+      submission: result.submission,
+      unlockedCount: result.unlockedCount,
+      identifier: result.identifier,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listForms,
   createForm,
@@ -184,4 +208,5 @@ module.exports = {
   deactivateForm,
   listSubmissions,
   getSubmissionById,
+  reactivateSubmissionLock,
 };

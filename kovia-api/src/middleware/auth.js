@@ -1,45 +1,50 @@
 /* ========================================
    KOVIA API — middleware/auth.js
-   ⚠️  PLACEHOLDER — autenticación pendiente.
-
-   Cuando implementes auth, reemplaza este middleware
-   con verificación real (JWT, API key, session, etc.).
-
-   Uso actual:
-     const auth = require('../middleware/auth');
-     router.use(auth);   // protege todas las rutas del router
-     router.get('/x', auth, controller.x); // protege una ruta puntual
+   Middleware de autenticación real para rutas admin.
+   Verifica JWT en cookie HttpOnly o header Authorization.
    ======================================== */
 'use strict';
 
 const R = require('../utils/response');
+const { verifyAccessToken, getUserById, sanitizeUser } = require('../services/auth.service');
+
+function extractBearerToken(req) {
+  const authHeader = String(req.headers.authorization || '').trim();
+  if (!authHeader) return '';
+
+  const [scheme, token] = authHeader.split(' ');
+  if (scheme?.toLowerCase() !== 'bearer') return '';
+  return String(token || '').trim();
+}
+
+function extractToken(req) {
+  const cookieName = process.env.AUTH_COOKIE_NAME || 'kovia_admin_token';
+  const tokenFromCookie = String(req.cookies?.[cookieName] || '').trim();
+  if (tokenFromCookie) return tokenFromCookie;
+  return extractBearerToken(req);
+}
 
 /**
- * Middleware de autenticación — placeholder.
- *
- * TODO: Implementar verificación real de JWT / API key.
- * Por ahora deja pasar en desarrollo y bloquea en producción
- * si no se detecta ningún token.
+ * Middleware de autenticación para rutas privadas.
  */
-module.exports = function auth(req, res, next) {
-  // En desarrollo se omite la verificación para facilitar testing
-  if (process.env.NODE_ENV === 'development') {
-    // Advertencia visible para recordar que el auth está pendiente
-    console.warn('[auth] ⚠️  Middleware de auth en modo BYPASS (NODE_ENV=development)');
+module.exports = async function auth(req, res, next) {
+  try {
+    const token = extractToken(req);
+
+    if (!token) {
+      return R.error(res, 401, 'No autorizado: sesión requerida');
+    }
+
+    const payload = verifyAccessToken(token);
+    const user = await getUserById(payload.sub);
+
+    if (!user || !user.is_active) {
+      return R.error(res, 401, 'No autorizado: usuario inválido o inactivo');
+    }
+
+    req.user = sanitizeUser(user);
     return next();
+  } catch {
+    return R.error(res, 401, 'No autorizado: token inválido o expirado');
   }
-
-  // ── Lógica real futura ────────────────────────────────
-  // const token = req.headers.authorization?.split(' ')[1];
-  // if (!token) return R.error(res, 401, 'Token requerido');
-  // try {
-  //   req.user = jwt.verify(token, process.env.JWT_SECRET);
-  //   next();
-  // } catch {
-  //   return R.error(res, 401, 'Token inválido o expirado');
-  // }
-  // ─────────────────────────────────────────────────────
-
-  // En producción bloquea hasta que se implemente auth real
-  return R.error(res, 401, 'Autenticación no implementada. Contacta al administrador.');
 };

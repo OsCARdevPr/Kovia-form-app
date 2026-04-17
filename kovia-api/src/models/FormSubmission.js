@@ -46,12 +46,38 @@ const FormSubmission = sequelize.define('FormSubmission', {
     defaultValue: {},
     comment:      'IP, UTMs, user-agent y otros datos de contexto',
   },
+
+  submission_identifier: {
+    type:         DataTypes.STRING(191),
+    allowNull:    true,
+    comment:      'Identificador normalizado del usuario para bloqueo por formulario',
+  },
+
+  submission_identifier_source: {
+    type:         DataTypes.STRING(50),
+    allowNull:    true,
+    comment:      'Fuente del identificador (ip, header o anonymous-fingerprint)',
+  },
+
+  submission_lock_active: {
+    type:         DataTypes.BOOLEAN,
+    allowNull:    false,
+    defaultValue: false,
+    comment:      'Si esta activo, bloquea reenvio para este identificador en el formulario',
+  },
+
+  submission_lock_reactivated_at: {
+    type:         DataTypes.DATE,
+    allowNull:    true,
+    comment:      'Fecha en que se desbloqueo el reenvio para esta submission',
+  },
 }, {
   tableName: 'form_submissions',
   comment:   'Respuestas de usuarios a formularios dinámicos',
   indexes: [
     { fields: ['form_id'] },
     { fields: ['created_at'] },
+    { fields: ['form_id', 'submission_identifier', 'submission_lock_active'], name: 'form_submission_lock_idx' },
   ],
 });
 
