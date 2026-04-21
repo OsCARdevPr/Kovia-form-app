@@ -56,13 +56,20 @@ function warning(res, httpStatus, message, data = null, warnings = []) {
  * @param {number}  httpStatus  - Código HTTP 4xx / 5xx
  * @param {string}  message     - Mensaje descriptivo del error
  * @param {*}       [errors]    - Detalle de errores (e.g. Zod fieldErrors)
+ * @param {string}  [code]      - Codigo opcional para clasificar error
  */
-function error(res, httpStatus, message, errors = null) {
-  return res.status(httpStatus).json({
+function error(res, httpStatus, message, errors = null, code = null) {
+  const payload = {
     status: 'error',
     message,
     errors,
-  });
+  };
+
+  if (typeof code === 'string' && code.trim()) {
+    payload.code = code.trim();
+  }
+
+  return res.status(httpStatus).json(payload);
 }
 
 module.exports = { success, warning, error };

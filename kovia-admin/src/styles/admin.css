@@ -36,3 +36,82 @@ body {
     radial-gradient(circle at 88% 84%, rgba(255, 184, 123, 0.22), transparent 35%),
     linear-gradient(145deg, #eef4ff 0%, #f9fbff 100%);
 }
+
+.kovia-label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.kovia-input,
+.kovia-select,
+.kovia-textarea {
+  width: 100%;
+  border: 1px solid color-mix(in oklab, var(--foreground), transparent 80%);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--background), transparent 12%);
+  color: inherit;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.kovia-textarea {
+  min-height: 260px;
+  resize: vertical;
+}
+
+.kovia-textarea-lg {
+  min-height: 380px;
+}
+
+.kovia-input:focus,
+.kovia-select:focus,
+.kovia-textarea:focus {
+  outline: 2px solid color-mix(in oklab, var(--accent), white 25%);
+  outline-offset: 1px;
+}
+
+.kovia-structure-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid color-mix(in oklab, var(--foreground), transparent 82%);
+  border-radius: 12px;
+  padding: 10px;
+  background: color-mix(in oklab, var(--background), transparent 6%);
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kovia-structure-item.active {
+  border-color: color-mix(in oklab, var(--accent), white 20%);
+  background: color-mix(in oklab, var(--accent), transparent 86%);
+}
+
+.kovia-preview-question {
+  border: 1px dashed color-mix(in oklab, var(--foreground), transparent 80%);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.kovia-preview-label {
+  font-size: 13px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.kovia-file-upload {
+  border: 1px solid color-mix(in oklab, var(--foreground), transparent 80%);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.kovia-file-upload input {
+  display: none;
+}

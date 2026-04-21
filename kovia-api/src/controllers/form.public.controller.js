@@ -8,8 +8,9 @@
    ======================================== */
 'use strict';
 
-const service = require('../services/form.service');
-const R       = require('../utils/response');
+const service        = require('../services/form.service');
+const webhookService = require('../services/webhook.service');
+const R              = require('../utils/response');
 
 /**
  * GET /api/forms/:slug
@@ -52,10 +53,18 @@ async function submit(req, res, next) {
     const answers = req.body?.answers;
 
     if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
-      return R.error(res, 422, 'El campo "answers" es requerido y debe ser un objeto');
+      return R.error(res, 422, 'El campo "answers" es requerido y debe ser un objeto', {
+        fieldErrors: { answers: ['El campo "answers" es requerido y debe ser un objeto'] },
+        formErrors: [],
+      }, 'VALIDATION_ERROR');
     }
 
     const { submission, warnings } = await service.submitForm(form, answers, req);
+
+    // Disparar webhooks configurados para este formulario (fire-and-forget)
+    webhookService.triggerWebhooksForForm(form.id, submission, form).catch((error) => {
+      console.error('[webhooks] Error al iniciar disparo para submission:', submission.id, error?.message || error);
+    });
 
     if (warnings.length > 0) {
       return R.warning(res, 201, 'Formulario enviado con advertencias', {
@@ -72,14 +81,17 @@ async function submit(req, res, next) {
     // Error de validación de required desde el service
     if (err.statusCode === 422 && err.missingFields) {
       return R.error(res, 422, err.message, {
+        fieldErrors: null,
+        formErrors: [],
         missingFields: err.missingFields,
-      });
+      }, err.code || 'VALIDATION_ERROR');
     }
 
     if (err.statusCode === 422 && err.fieldErrors) {
       return R.error(res, 422, err.message, {
         fieldErrors: err.fieldErrors,
-      });
+        formErrors: [],
+      }, err.code || 'VALIDATION_ERROR');
     }
 
     if (err.statusCode === 409) {

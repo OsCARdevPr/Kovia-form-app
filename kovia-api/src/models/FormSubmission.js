@@ -71,6 +71,19 @@ const FormSubmission = sequelize.define('FormSubmission', {
     allowNull:    true,
     comment:      'Fecha en que se desbloqueo el reenvio para esta submission',
   },
+
+  is_archived: {
+    type:         DataTypes.BOOLEAN,
+    allowNull:    false,
+    defaultValue: false,
+    comment:      'Marca si la respuesta fue archivada desde admin',
+  },
+
+  archived_at: {
+    type:      DataTypes.DATE,
+    allowNull: true,
+    comment:   'Fecha de archivado de la respuesta',
+  },
 }, {
   tableName: 'form_submissions',
   comment:   'Respuestas de usuarios a formularios dinámicos',
@@ -78,6 +91,7 @@ const FormSubmission = sequelize.define('FormSubmission', {
     { fields: ['form_id'] },
     { fields: ['created_at'] },
     { fields: ['form_id', 'submission_identifier', 'submission_lock_active'], name: 'form_submission_lock_idx' },
+    { fields: ['form_id', 'is_archived', 'created_at'], name: 'form_submission_archive_idx' },
   ],
 });
 

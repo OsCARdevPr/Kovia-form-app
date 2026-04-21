@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
 
       setUser(null);
       setStatus('error');
-      setErrorMessage(error?.message || 'Could not validate session');
+      setErrorMessage(error?.message || 'No se pudo validar la sesión actual.');
       return null;
     }
   }, []);
@@ -72,7 +72,7 @@ export function useAuth() {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error('useAuth must be used inside AuthProvider');
+    throw new Error('useAuth debe usarse dentro de AuthProvider');
   }
 
   return context;

@@ -5,12 +5,25 @@
    ======================================== */
 'use strict';
 
+const fs = require('fs/promises');
+const path = require('path');
 const crypto        = require('crypto');
 const { z }         = require('zod');
 const { Op }        = require('sequelize');
 const Form          = require('../models/Form');
 const FormTemplate  = require('../models/FormTemplate');
 const FormSubmission = require('../models/FormSubmission');
+const WebhookFormConfig = require('../models/WebhookFormConfig');
+
+const AI_CONTEXT_DIR = path.resolve(__dirname, '../../context/contexto-ia');
+const LEGACY_CONTEXT_DIR = path.resolve(__dirname, '../../context');
+
+const AI_CONTEXT_FILES = Object.freeze({
+  importGuidelines: 'form-config-standard.md',
+  formContextTemplate: 'form-ai-context-template.md',
+});
+
+const aiMarkdownCache = new Map();
 
 function slugify(value) {
   return String(value || '')
@@ -21,12 +34,38 @@ function slugify(value) {
     .replace(/-{2,}/g, '-');
 }
 
-async function generateUniqueSlug(title) {
-  const base = slugify(title) || `form-${Date.now()}`;
+const AUTO_FORM_SLUG_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const AUTO_FORM_SLUG_LENGTH = 10;
+
+function createAutoFormSlugCandidate() {
+  let output = '';
+  for (let index = 0; index < AUTO_FORM_SLUG_LENGTH; index += 1) {
+    const randomIndex = crypto.randomInt(0, AUTO_FORM_SLUG_CHARS.length);
+    output += AUTO_FORM_SLUG_CHARS[randomIndex];
+  }
+  return output;
+}
+
+async function generateUniqueAutoFormSlug() {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const candidate = createAutoFormSlugCandidate();
+    const existing = await Form.findOne({ where: { slug: candidate } });
+    if (!existing) {
+      return candidate;
+    }
+  }
+
+  const err = new Error('No se pudo generar un slug automático único');
+  err.statusCode = 500;
+  throw err;
+}
+
+async function generateUniqueTemplateSlug(name) {
+  const base = slugify(name) || `template-${Date.now()}`;
   let slug = base;
   let suffix = 1;
 
-  while (await Form.findOne({ where: { slug } })) {
+  while (await FormTemplate.findOne({ where: { slug } })) {
     slug = `${base}-${suffix}`;
     suffix += 1;
   }
@@ -41,9 +80,237 @@ const FIELD_TYPE_ALIASES = Object.freeze({
   date_time: 'date-time',
 });
 
+const SUPPORTED_QUESTION_TYPES = Object.freeze([
+  'text',
+  'textarea',
+  'radio',
+  'checkbox',
+  'select',
+  'telefono',
+  'email',
+  'date',
+  'date-time',
+  'price',
+]);
+
+const zRuleSchema = z.object({
+  rule: z.enum(['min', 'max', 'minItems', 'maxItems', 'regex', 'email', 'minValue', 'maxValue', 'enum']),
+  value: z.any().optional(),
+  pattern: z.string().optional(),
+  flags: z.string().optional(),
+  options: z.array(z.any()).optional(),
+  message: z.string().optional(),
+});
+
+const sliderMarkSchema = z.object({
+  value: z.coerce.number(),
+  label: z.string().min(1, 'slider.marks.label es requerido'),
+});
+
+const sliderConfigSchema = z.object({
+  min: z.coerce.number(),
+  max: z.coerce.number(),
+  step: z.coerce.number().positive().optional(),
+  prefix: z.string().optional(),
+  unitSuffix: z.string().optional(),
+  showPlusAtMax: z.boolean().optional(),
+  confirmLabel: z.string().optional(),
+  marks: z.array(sliderMarkSchema).optional(),
+}).superRefine((slider, ctx) => {
+  if (!Number.isFinite(slider.min) || !Number.isFinite(slider.max)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'slider.min y slider.max deben ser numéricos',
+    });
+    return;
+  }
+
+  if (slider.max <= slider.min) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'slider.max debe ser mayor que slider.min',
+      path: ['max'],
+    });
+  }
+
+  if (Array.isArray(slider.marks)) {
+    for (const [index, mark] of slider.marks.entries()) {
+      if (mark.value < slider.min || mark.value > slider.max) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'slider.marks.value debe estar dentro del rango min/max',
+          path: ['marks', index, 'value'],
+        });
+      }
+    }
+  }
+});
+
+const questionConfigSchema = z.object({
+  id: z.string().min(1, 'question.id es requerido'),
+  type: z.string().min(1, 'question.type es requerido'),
+  label: z.string().min(1, 'question.label es requerido'),
+  placeholder: z.string().optional(),
+  hint: z.string().optional(),
+  required: z.boolean().optional().default(false),
+  required_message: z.string().optional(),
+  options: z.array(z.string()).optional(),
+  mask: z.record(z.string(), z.any()).optional(),
+  mask_preset: z.string().optional(),
+  slider: sliderConfigSchema.optional(),
+  validation: z.object({
+    z: z.array(zRuleSchema).optional(),
+  }).optional(),
+  visible_when: z.object({
+    field: z.string(),
+    includes: z.any().optional(),
+    equals: z.any().optional(),
+    notEquals: z.any().optional(),
+  }).optional(),
+});
+
+const stepConfigSchema = z.object({
+  order: z.number().int().positive(),
+  title: z.string().min(1, 'step.title es requerido'),
+  short_label: z.string().optional(),
+  questions: z.array(questionConfigSchema),
+});
+
+const formConfigSchema = z.object({
+  version: z.number().int().positive().optional().default(1),
+  validation_engine: z.string().optional().default('z-rules-v1'),
+  field_type_index: z.record(z.string(), z.any()).optional().default({}),
+  completion_action: z.record(z.string(), z.any()).optional(),
+  submission_policy: z.object({
+    enabled: z.boolean().optional(),
+    once_per_identifier: z.boolean().optional(),
+    identifier_strategy: z.enum(['ip', 'header', 'ip_then_header', 'header_then_ip']).optional(),
+    identifier_header: z.string().optional(),
+    allow_reactivation: z.boolean().optional(),
+  }).optional(),
+  steps: z.array(stepConfigSchema).optional().default([]),
+}).superRefine((config, ctx) => {
+  const seen = new Set();
+
+  for (const [stepIndex, step] of config.steps.entries()) {
+    for (const [questionIndex, question] of step.questions.entries()) {
+      const normalizedType = normalizeQuestionType(question.type);
+      if (!SUPPORTED_QUESTION_TYPES.includes(normalizedType)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `question.type no soportado: ${question.type}`,
+          path: ['steps', stepIndex, 'questions', questionIndex, 'type'],
+        });
+      }
+
+      if (question?.slider && normalizedType !== 'price') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'question.slider solo está permitido en preguntas de tipo price',
+          path: ['steps', stepIndex, 'questions', questionIndex, 'slider'],
+        });
+      }
+
+      const normalizedId = String(question.id || '').trim();
+      if (!normalizedId) continue;
+
+      if (seen.has(normalizedId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `question.id duplicado: ${normalizedId}`,
+          path: ['steps', stepIndex, 'questions', questionIndex, 'id'],
+        });
+      }
+      seen.add(normalizedId);
+    }
+  }
+});
+
 function normalizeQuestionType(type) {
   const rawType = String(type || '').trim().toLowerCase();
   return FIELD_TYPE_ALIASES[rawType] || rawType || 'text';
+}
+
+function toFieldErrorsFromZodError(error) {
+  const fieldErrors = {};
+
+  for (const issue of error.issues || []) {
+    const key = issue.path && issue.path.length > 0
+      ? issue.path.join('.')
+      : '_form';
+
+    if (!fieldErrors[key]) {
+      fieldErrors[key] = [];
+    }
+
+    fieldErrors[key].push(issue.message);
+  }
+
+  return fieldErrors;
+}
+
+function normalizeFormConfig(rawConfig) {
+  const parsed = formConfigSchema.safeParse(rawConfig || {});
+  if (!parsed.success) {
+    const err = new Error('Configuración JSON de formulario inválida');
+    err.statusCode = 422;
+    err.code = 'VALIDATION_ERROR';
+    err.fieldErrors = toFieldErrorsFromZodError(parsed.error);
+    throw err;
+  }
+
+  const config = parsed.data;
+  return {
+    ...config,
+    steps: config.steps.map((step) => ({
+      ...step,
+      questions: step.questions.map((question) => ({
+        ...question,
+        id: String(question.id).trim(),
+        type: normalizeQuestionType(question.type),
+      })),
+    })),
+  };
+}
+
+function buildConfigSummary(config) {
+  const steps = Array.isArray(config?.steps) ? config.steps : [];
+  let questions = 0;
+
+  for (const step of steps) {
+    if (Array.isArray(step?.questions)) {
+      questions += step.questions.length;
+    }
+  }
+
+  return {
+    steps: steps.length,
+    questions,
+  };
+}
+
+async function validateFormConfig(rawConfig) {
+  const normalizedConfig = normalizeFormConfig(rawConfig || {});
+
+  return {
+    normalizedConfig,
+    summary: buildConfigSummary(normalizedConfig),
+  };
+}
+
+async function ensureTemplateExists(templateId) {
+  if (!templateId) return;
+
+  const template = await FormTemplate.findByPk(templateId);
+  if (!template) {
+    const err = new Error('template_id no existe');
+    err.statusCode = 422;
+    err.code = 'VALIDATION_ERROR';
+    err.fieldErrors = {
+      template_id: ['template_id no existe'],
+    };
+    throw err;
+  }
 }
 
 function isDigitsOnly(value) {
@@ -185,7 +452,7 @@ function applyZRule(schema, rule) {
       return schema;
     case 'email':
       if (typeof schema.email === 'function') {
-        return schema.email(rule.message || 'Formato de correo invalido');
+        return schema.email(rule.message || 'Formato de correo inválido');
       }
       return schema;
     case 'minValue':
@@ -253,6 +520,29 @@ function buildQuestionSchema(question) {
     schema = applyZRule(schema, rule);
   }
 
+  if (questionType === 'price' && question?.slider && typeof question.slider === 'object') {
+    const sliderMin = Number(question.slider.min);
+    const sliderMax = Number(question.slider.max);
+
+    if (Number.isFinite(sliderMin)) {
+      schema = schema.refine((value) => {
+        if (value === '' || value == null) return true;
+        const parsedValue = parsePriceValue(value);
+        if (parsedValue === null) return false;
+        return parsedValue >= sliderMin;
+      }, { message: `El valor minimo permitido por slider es ${sliderMin}` });
+    }
+
+    if (Number.isFinite(sliderMax)) {
+      schema = schema.refine((value) => {
+        if (value === '' || value == null) return true;
+        const parsedValue = parsePriceValue(value);
+        if (parsedValue === null) return false;
+        return parsedValue <= sliderMax;
+      }, { message: `El valor maximo permitido por slider es ${sliderMax}` });
+    }
+  }
+
   if (question.required) {
     if (questionType === 'checkbox') {
       return schema.min(1, question.required_message || 'Este campo es obligatorio');
@@ -306,6 +596,162 @@ function validateAnswersAgainstConfig(config, answers) {
 // Utilidades internas
 // ─────────────────────────────────────────────────────────
 
+async function readAiContextMarkdown(fileName, { legacyFileName = fileName } = {}) {
+  const cacheKey = `${fileName}::${legacyFileName || ''}`;
+  if (aiMarkdownCache.has(cacheKey)) {
+    return aiMarkdownCache.get(cacheKey);
+  }
+
+  const candidatePaths = [
+    path.resolve(AI_CONTEXT_DIR, fileName),
+    ...(legacyFileName ? [path.resolve(LEGACY_CONTEXT_DIR, legacyFileName)] : []),
+  ];
+
+  let lastError = null;
+
+  for (const filePath of candidatePaths) {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      aiMarkdownCache.set(cacheKey, content);
+      return content;
+    } catch (err) {
+      if (err?.code !== 'ENOENT') {
+        throw err;
+      }
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error(`No se encontro el markdown requerido: ${fileName}`);
+}
+
+function normalizeBaseUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function buildPublicFormUrlForAiContext(slug, formUrlBase) {
+  const cleanSlug = String(slug || '').trim();
+  if (!cleanSlug) {
+    return '(slug no disponible)';
+  }
+
+  if (!formUrlBase) {
+    return '(FORM_URL_BASE no configurado)';
+  }
+
+  return `${formUrlBase}/${encodeURIComponent(cleanSlug)}`;
+}
+
+function buildPublicApiEndpointForAiContext(slug, adminApiBase, action = '') {
+  const cleanSlug = String(slug || '').trim();
+  const cleanAction = String(action || '').replace(/^\/+/, '');
+  const suffix = cleanAction ? `/${cleanAction}` : '';
+
+  if (!cleanSlug || !adminApiBase) {
+    return cleanAction ? '/api/forms/:slug/submit' : '/api/forms/:slug';
+  }
+
+  return `${adminApiBase}/api/forms/${encodeURIComponent(cleanSlug)}${suffix}`;
+}
+
+function safeJsonStringify(value) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return '{}';
+  }
+}
+
+function summarizeQuestionForAiContext(question) {
+  const safeType = String(question?.type || 'text').trim() || 'text';
+  const safeId = String(question?.id || '').trim() || 'sin_id';
+  const safeLabel = String(question?.label || '').trim() || safeId;
+  const requiredTag = question?.required ? 'requerido' : 'opcional';
+  const sliderTag = question?.slider && typeof question.slider === 'object' ? ' | slider' : '';
+
+  return `- ${safeId} (${safeType}${sliderTag}, ${requiredTag}): ${safeLabel}`;
+}
+
+function buildStepsBlockForAiContext(config) {
+  const steps = Array.isArray(config?.steps) ? config.steps : [];
+  const totalQuestions = steps.reduce((acc, step) => acc + (Array.isArray(step?.questions) ? step.questions.length : 0), 0);
+
+  const stepsBlock = steps.length > 0
+    ? steps.map((step, index) => {
+      const stepOrder = Number(step?.order) || index + 1;
+      const stepTitle = String(step?.title || `Paso ${stepOrder}`).trim() || `Paso ${stepOrder}`;
+      const questions = Array.isArray(step?.questions) ? step.questions : [];
+      const questionsBlock = questions.length > 0
+        ? questions.map((question) => summarizeQuestionForAiContext(question)).join('\n')
+        : '- Sin preguntas';
+
+      return `### Paso ${stepOrder}: ${stepTitle}\n${questionsBlock}`;
+    }).join('\n\n')
+    : 'No hay pasos definidos en la configuracion actual.';
+
+  return {
+    steps,
+    totalQuestions,
+    stepsBlock,
+  };
+}
+
+function applyAiTemplateValues(templateMarkdown, values) {
+  let output = String(templateMarkdown || '');
+
+  for (const [key, value] of Object.entries(values || {})) {
+    output = output.split(`{{${key}}}`).join(String(value ?? ''));
+  }
+
+  return output;
+}
+
+/**
+ * Obtiene markdown con el estandar de construccion de config JSON.
+ */
+async function getImportGuidelinesMarkdown() {
+  return readAiContextMarkdown(AI_CONTEXT_FILES.importGuidelines, {
+    legacyFileName: 'form-config-standard.md',
+  });
+}
+
+async function getFormAiContextMarkdown(formId, { formUrlBase, adminApiBase } = {}) {
+  const form = await getFormById(formId);
+  if (!form) return null;
+
+  const safeForm = form && typeof form === 'object' ? form : {};
+  const safeConfig = safeForm.config && typeof safeForm.config === 'object' ? safeForm.config : {};
+  const safeSlug = String(safeForm.slug || '').trim();
+  const safeTitle = String(safeForm.title || 'Formulario').trim();
+  const safeTemplateName = String(safeForm?.template?.name || 'Plantilla').trim();
+
+  const normalizedFormUrlBase = normalizeBaseUrl(formUrlBase);
+  const normalizedAdminApiBase = normalizeBaseUrl(adminApiBase);
+  const { steps, totalQuestions, stepsBlock } = buildStepsBlockForAiContext(safeConfig);
+
+  const templateMarkdown = await readAiContextMarkdown(AI_CONTEXT_FILES.formContextTemplate, {
+    legacyFileName: null,
+  });
+
+  return applyAiTemplateValues(templateMarkdown, {
+    FORM_TITLE: safeTitle,
+    FORM_ID: safeForm.id || 'N/A',
+    TEMPLATE_ID: safeForm.template_id || 'N/A',
+    TEMPLATE_NAME: safeTemplateName,
+    FORM_SLUG: safeSlug || 'N/A',
+    FORM_STATUS: safeForm.is_active ? 'activo' : 'inactivo',
+    CONFIG_VERSION: safeConfig.version || 1,
+    TOTAL_STEPS: steps.length,
+    TOTAL_QUESTIONS: totalQuestions,
+    PUBLIC_FORM_URL: buildPublicFormUrlForAiContext(safeSlug, normalizedFormUrlBase),
+    CONFIG_ENDPOINT: buildPublicApiEndpointForAiContext(safeSlug, normalizedAdminApiBase),
+    SUBMIT_ENDPOINT: buildPublicApiEndpointForAiContext(safeSlug, normalizedAdminApiBase, 'submit'),
+    STEPS_BLOCK: stepsBlock,
+    FORM_CONFIG_JSON: safeJsonStringify(safeConfig),
+    GENERATED_AT: new Date().toISOString(),
+  });
+}
+
 /**
  * Extrae preguntas requeridas de todos los pasos del formulario.
  * @param {object} config
@@ -315,11 +761,11 @@ function getRequiredQuestionIds(config) {
   const required = [];
   const steps = config?.steps ?? [];
   for (const step of steps) {
-    if (!step.questions) continue;
-    for (const q of step.questions) {
+    for (const q of step?.questions ?? []) {
       if (q.required) required.push(q.id);
     }
   }
+
   return required;
 }
 
@@ -518,17 +964,18 @@ async function submitForm(form, answers, rawReq) {
 
   if (submissionPolicy.enabled) {
     if (!identifier.value) {
-      const err = new Error('No fue posible identificar al usuario para validar envios unicos');
+      const err = new Error('No fue posible identificar al usuario para validar envíos únicos');
       err.statusCode = 422;
+      err.code = 'VALIDATION_ERROR';
       err.fieldErrors = {
-        _submission: ['No fue posible identificar al usuario para validar envios unicos'],
+        _submission: ['No fue posible identificar al usuario para validar envíos únicos'],
       };
       throw err;
     }
 
     const lock = await findActiveSubmissionLock(form.id, identifier.value);
     if (lock) {
-      const err = new Error('Este formulario ya fue enviado por este usuario. Solicita reactivacion para reenviar.');
+      const err = new Error('Este formulario ya fue enviado por este usuario. Solicita reactivación para reenviar.');
       err.statusCode = 409;
       err.code = 'FORM_ALREADY_SUBMITTED';
       err.reactivationRequired = submissionPolicy.allowReactivation;
@@ -546,14 +993,16 @@ async function submitForm(form, answers, rawReq) {
   if (!valid) {
     const err = new Error('Preguntas requeridas sin respuesta');
     err.statusCode  = 422;
+    err.code = 'VALIDATION_ERROR';
     err.missingFields = missing;
     throw err;
   }
 
   const zValidation = validateAnswersAgainstConfig(form.config, answers);
   if (!zValidation.valid) {
-    const err = new Error('Error de validacion en campos del formulario');
+    const err = new Error('Error de validación en campos del formulario');
     err.statusCode = 422;
+    err.code = 'VALIDATION_ERROR';
     err.fieldErrors = zValidation.fieldErrors;
     throw err;
   }
@@ -595,9 +1044,29 @@ async function submitForm(form, answers, rawReq) {
 /**
  * Lista todos los formularios con paginación.
  */
-async function listForms({ page = 1, limit = 20 } = {}) {
+async function listForms({ page = 1, limit = 20, templateId, search, includeInactive = false, isActive } = {}) {
   const offset = (page - 1) * limit;
+  const where = {};
+
+  if (templateId) {
+    where.template_id = templateId;
+  }
+
+  if (typeof isActive === 'boolean') {
+    where.is_active = isActive;
+  } else if (!includeInactive) {
+    where.is_active = true;
+  }
+
+  if (search) {
+    where[Op.or] = [
+      { title: { [Op.like]: `%${search}%` } },
+      { slug: { [Op.like]: `%${search}%` } },
+    ];
+  }
+
   return Form.findAndCountAll({
+    where,
     order:      [['created_at', 'DESC']],
     limit,
     offset,
@@ -607,10 +1076,103 @@ async function listForms({ page = 1, limit = 20 } = {}) {
 }
 
 /**
+ * Lista templates para la vista jerarquica de proyectos.
+ */
+async function listTemplates({ includeInactive = false } = {}) {
+  const templates = await FormTemplate.findAll({
+    where: includeInactive ? {} : { is_active: true },
+    include: [{
+      model: Form,
+      as: 'forms',
+      attributes: ['id', 'is_active'],
+      required: false,
+    }],
+    order: [['name', 'ASC']],
+  });
+
+  return templates.map((template) => {
+    const json = template.toJSON();
+    const forms = Array.isArray(json.forms) ? json.forms : [];
+
+    return {
+      id: json.id,
+      name: json.name,
+      slug: json.slug,
+      description: json.description,
+      is_active: json.is_active,
+      forms_count: forms.length,
+      active_forms_count: forms.filter((form) => form.is_active !== false).length,
+    };
+  });
+}
+
+/**
+ * Crea un template para agrupar formularios.
+ */
+async function createTemplate({ name, slug, description, is_active } = {}) {
+  const finalSlug = slugify(slug) || await generateUniqueTemplateSlug(name);
+
+  const existing = await FormTemplate.findOne({ where: { slug: finalSlug } });
+  if (existing) {
+    const err = new Error(`El slug de template '${finalSlug}' ya está en uso`);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const created = await FormTemplate.create({
+    name,
+    slug: finalSlug,
+    description: description ?? null,
+    is_active: is_active ?? true,
+  });
+
+  return {
+    id: created.id,
+    name: created.name,
+    slug: created.slug,
+    description: created.description,
+    is_active: created.is_active,
+    forms_count: 0,
+    active_forms_count: 0,
+  };
+}
+
+/**
  * Crea un nuevo formulario. Slug debe ser único.
  */
-async function createForm({ title, slug, template_id, config, is_active }) {
-  const finalSlug = slugify(slug) || await generateUniqueSlug(title);
+async function createForm({ title, slug, template_id, config, is_active, auto_generate_slug }) {
+  const rawSlug = String(slug || '').trim();
+  const normalizedManualSlug = rawSlug ? slugify(rawSlug) : '';
+  const shouldAutoGenerateSlug = auto_generate_slug === true || auto_generate_slug === 'true';
+  let finalSlug = normalizedManualSlug;
+
+  if (rawSlug && !normalizedManualSlug) {
+    const err = new Error('El campo "slug" es inválido');
+    err.statusCode = 422;
+    err.code = 'VALIDATION_ERROR';
+    err.fieldErrors = {
+      slug: ['El campo "slug" es inválido'],
+    };
+    throw err;
+  }
+
+  if (!finalSlug) {
+    if (!shouldAutoGenerateSlug) {
+      const err = new Error('El campo "slug" es requerido o habilita auto_generate_slug');
+      err.statusCode = 422;
+      err.code = 'VALIDATION_ERROR';
+      err.fieldErrors = {
+        slug: ['El campo "slug" es requerido'],
+      };
+      throw err;
+    }
+
+    finalSlug = await generateUniqueAutoFormSlug();
+  }
+
+  const normalizedConfig = normalizeFormConfig(config || { steps: [] });
+
+  await ensureTemplateExists(template_id || null);
 
   const existing = await Form.findOne({ where: { slug: finalSlug } });
   if (existing) {
@@ -623,7 +1185,7 @@ async function createForm({ title, slug, template_id, config, is_active }) {
     title,
     slug: finalSlug,
     template_id: template_id || null,
-    config: config || { steps: [] },
+    config: normalizedConfig,
     is_active: is_active ?? true,
   });
 }
@@ -656,11 +1218,17 @@ async function updateForm(id, { title, slug, template_id, config, is_active }) {
     }
   }
 
+  if (template_id !== undefined) {
+    await ensureTemplateExists(template_id || null);
+  }
+
+  const normalizedConfig = config != null ? normalizeFormConfig(config) : null;
+
   await form.update({
     ...(title       != null && { title }),
     ...(nextSlug    != null && { slug: nextSlug }),
     ...(template_id !== undefined && { template_id }),
-    ...(config      != null && { config }),
+    ...(normalizedConfig != null && { config: normalizedConfig }),
     ...(is_active   != null && { is_active }),
   });
 
@@ -677,6 +1245,24 @@ async function deactivateForm(id) {
   return form;
 }
 
+/**
+ * Elimina permanentemente un formulario y sus submissions asociadas.
+ */
+async function deleteFormPermanently(id) {
+  const form = await Form.findByPk(id);
+  if (!form) return null;
+
+  const deletedSubmissions = await FormSubmission.count({ where: { form_id: id } });
+  const deletedWebhookConfigs = await WebhookFormConfig.count({ where: { form_id: id } });
+  await form.destroy();
+
+  return {
+    id,
+    deletedSubmissions,
+    deletedWebhookConfigs,
+  };
+}
+
 // ─────────────────────────────────────────────────────────
 // Admin — Submissions
 // ─────────────────────────────────────────────────────────
@@ -684,10 +1270,16 @@ async function deactivateForm(id) {
 /**
  * Lista submissions de un formulario con paginación.
  */
-async function listSubmissionsByForm(formId, { page = 1, limit = 20 } = {}) {
+async function listSubmissionsByForm(formId, { page = 1, limit = 20, include_archived = false } = {}) {
   const offset = (page - 1) * limit;
+
+  const where = {
+    form_id: formId,
+    ...(include_archived ? {} : { is_archived: false }),
+  };
+
   return FormSubmission.findAndCountAll({
-    where:  { form_id: formId },
+    where,
     order:  [['created_at', 'DESC']],
     limit,
     offset,
@@ -753,18 +1345,244 @@ async function reactivateSubmissionLock(submissionId, { reactivatedBy = null } =
   };
 }
 
+/**
+ * Archiva respuestas de un formulario.
+ */
+async function archiveSubmissionsByForm(formId) {
+  const form = await Form.findByPk(formId);
+  if (!form) return null;
+
+  const total = await FormSubmission.count({ where: { form_id: formId } });
+  const now = new Date();
+
+  const [archivedCount] = await FormSubmission.update({
+    is_archived: true,
+    archived_at: now,
+  }, {
+    where: {
+      form_id: formId,
+      is_archived: false,
+    },
+  });
+
+  return {
+    form_id: formId,
+    total,
+    archivedCount,
+    alreadyArchived: Math.max(0, total - archivedCount),
+  };
+}
+
+/**
+ * Archiva webhooks (configs activos) de un formulario.
+ */
+async function archiveWebhookConfigsByForm(formId) {
+  const form = await Form.findByPk(formId);
+  if (!form) return null;
+
+  const total = await WebhookFormConfig.count({ where: { form_id: formId } });
+
+  const [archivedCount] = await WebhookFormConfig.update({
+    is_active: false,
+  }, {
+    where: {
+      form_id: formId,
+      is_active: true,
+    },
+  });
+
+  return {
+    form_id: formId,
+    total,
+    archivedCount,
+    alreadyArchived: Math.max(0, total - archivedCount),
+  };
+}
+
+/**
+ * Exporta formulario como JSON para backup/edicion.
+ */
+async function exportFormAsJson(id) {
+  const form = await getFormById(id);
+  if (!form) return null;
+
+  return {
+    form: {
+      id: form.id,
+      title: form.title,
+      slug: form.slug,
+      template_id: form.template_id,
+      is_active: form.is_active,
+      created_at: form.created_at,
+      updated_at: form.updated_at,
+    },
+    config: form.config,
+  };
+}
+
+/**
+ * Importa un form desde JSON.
+ */
+async function importFormFromJson(payload) {
+  const rawJson = typeof payload?.json === 'string' ? payload.json.trim() : '';
+  let importedPayload = payload && typeof payload === 'object' ? payload : {};
+
+  if (rawJson) {
+    try {
+      const parsed = JSON.parse(rawJson);
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Parsed JSON must be an object');
+      }
+
+      importedPayload = {
+        ...parsed,
+        title: payload?.title ?? parsed?.title,
+        slug: payload?.slug ?? parsed?.slug,
+        template_id: payload?.template_id ?? parsed?.template_id,
+        is_active: payload?.is_active ?? parsed?.is_active,
+      };
+    } catch {
+      const err = new Error('El campo "json" debe ser un JSON válido');
+      err.statusCode = 422;
+      err.code = 'VALIDATION_ERROR';
+      err.fieldErrors = { json: ['El campo "json" debe ser un JSON válido'] };
+      throw err;
+    }
+  }
+
+  const title = String(importedPayload?.title || importedPayload?.form?.title || '').trim();
+  const slug = String(importedPayload?.slug || importedPayload?.form?.slug || '').trim();
+  const autoGenerateSlug = importedPayload?.auto_generate_slug === true
+    || importedPayload?.auto_generate_slug === 'true'
+    || importedPayload?.form?.auto_generate_slug === true
+    || importedPayload?.form?.auto_generate_slug === 'true';
+  const templateId = importedPayload?.template_id ?? importedPayload?.form?.template_id ?? null;
+  const isActive = importedPayload?.is_active ?? importedPayload?.form?.is_active;
+
+  const configInput = importedPayload?.config && typeof importedPayload.config === 'object'
+    ? importedPayload.config
+    : (importedPayload && typeof importedPayload === 'object' ? importedPayload : null);
+
+  if (!title) {
+    const err = new Error('El campo "title" es requerido para importar');
+    err.statusCode = 422;
+    err.code = 'VALIDATION_ERROR';
+    err.fieldErrors = { title: ['El campo "title" es requerido para importar'] };
+    throw err;
+  }
+
+  if (!configInput || typeof configInput !== 'object') {
+    const err = new Error('El campo "config" es requerido para importar');
+    err.statusCode = 422;
+    err.code = 'VALIDATION_ERROR';
+    err.fieldErrors = { config: ['El campo "config" es requerido para importar'] };
+    throw err;
+  }
+
+  return createForm({
+    title,
+    slug,
+    auto_generate_slug: autoGenerateSlug,
+    template_id: templateId,
+    config: configInput,
+    is_active: isActive,
+  });
+}
+
+/**
+ * Lista TODAS las submissions con filtros globales.
+ * Filtros: form_id, template_id, period ('24h'|'7d'|'30d'), search (en answers JSON serializado)
+ */
+async function listAllSubmissions({ page = 1, limit = 20, form_id, template_id, period, search, include_archived = false } = {}) {
+  const safeLimit  = Math.min(100, Math.max(1, parseInt(limit)  || 20));
+  const safePage   = Math.max(1, parseInt(page) || 1);
+  const offset     = (safePage - 1) * safeLimit;
+
+  const submissionWhere = {};
+  const formWhere       = {};
+
+  if (form_id) {
+    submissionWhere.form_id = String(form_id).trim();
+  }
+
+  if (!include_archived) {
+    submissionWhere.is_archived = false;
+  }
+
+  if (template_id) {
+    formWhere.template_id = String(template_id).trim();
+  }
+
+  if (period) {
+    const now = new Date();
+    const periodMap = { '24h': 24, '7d': 168, '30d': 720 };
+    const hours = periodMap[period];
+    if (hours) {
+      const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
+      submissionWhere.created_at = { [Op.gte]: since };
+    }
+  }
+
+  const { rows, count } = await FormSubmission.findAndCountAll({
+    where: submissionWhere,
+    include: [{
+      model:    Form,
+      as:       'form',
+      where:    Object.keys(formWhere).length ? formWhere : undefined,
+      required: Object.keys(formWhere).length > 0,
+      attributes: ['id', 'title', 'slug'],
+      include: [{
+        model:      FormTemplate,
+        as:         'template',
+        attributes: ['id', 'name'],
+      }],
+    }],
+    order:  [['created_at', 'DESC']],
+    limit:  safeLimit,
+    offset,
+  });
+
+  // Filtro de búsqueda en answers (post-query, Sequelize no hace full-text JSON portable)
+  let items = rows;
+  if (search) {
+    const q = String(search).toLowerCase();
+    items = rows.filter((s) => JSON.stringify(s.answers).toLowerCase().includes(q));
+  }
+
+  return {
+    items,
+    pagination: {
+      total:      count,
+      page:       safePage,
+      limit:      safeLimit,
+      totalPages: Math.ceil(count / safeLimit),
+    },
+  };
+}
+
 module.exports = {
   // Públicas
   getFormBySlug,
   submitForm,
   // Admin — forms
+  listTemplates,
+  createTemplate,
   listForms,
   createForm,
   getFormById,
   updateForm,
   deactivateForm,
+  deleteFormPermanently,
+  exportFormAsJson,
+  importFormFromJson,
+  validateFormConfig,
+  getImportGuidelinesMarkdown,
+  getFormAiContextMarkdown,
   // Admin — submissions
   listSubmissionsByForm,
+  listAllSubmissions,
   getSubmissionById,
   reactivateSubmissionLock,
+  archiveSubmissionsByForm,
+  archiveWebhookConfigsByForm,
 };

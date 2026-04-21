@@ -219,6 +219,20 @@ function parsePriceValue(rawValue) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function getPriceSliderBounds(question) {
+  const slider = question?.slider;
+  if (!slider || typeof slider !== 'object') return null;
+
+  const min = Number(slider.min);
+  const max = Number(slider.max);
+
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+    return null;
+  }
+
+  return { min, max };
+}
+
 function isValidPhoneValue(value) {
   if (typeof value !== 'string') return false;
 
@@ -320,6 +334,26 @@ function buildFieldSchema(question) {
   const rules = Array.isArray(question?.validation?.z) ? question.validation.z : [];
   for (const rule of rules) {
     schema = applyDynamicZRule(schema, rule);
+  }
+
+  if (fieldType === 'price') {
+    const sliderBounds = getPriceSliderBounds(question);
+
+    if (sliderBounds) {
+      schema = schema.refine((value) => {
+        if (value === '' || value == null) return true;
+        const parsedValue = parsePriceValue(value);
+        if (parsedValue === null) return false;
+        return parsedValue >= sliderBounds.min;
+      }, { message: `El valor minimo permitido por slider es ${sliderBounds.min}` });
+
+      schema = schema.refine((value) => {
+        if (value === '' || value == null) return true;
+        const parsedValue = parsePriceValue(value);
+        if (parsedValue === null) return false;
+        return parsedValue <= sliderBounds.max;
+      }, { message: `El valor maximo permitido por slider es ${sliderBounds.max}` });
+    }
   }
 
   if (fieldType !== 'checkbox' && Array.isArray(question?.options) && question.options.length > 0) {

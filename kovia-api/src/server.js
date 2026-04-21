@@ -22,7 +22,8 @@ require('./models/index');
 // Importar routers
 const formsPublicRouter      = require('./routes/forms.public');      // Público: llenado
 const formsAdminRouter       = require('./routes/forms.admin');       // Admin: CRUD forms
-const submissionsAdminRouter = require('./routes/submissions.admin'); // Admin: detalle submission
+const submissionsAdminRouter = require('./routes/submissions.admin'); // Admin: submissions
+const webhooksAdminRouter    = require('./routes/webhooks.admin');    // Admin: webhooks
 const authRouter             = require('./routes/auth');              // Auth admin
 
 const app = express();
@@ -38,7 +39,7 @@ app.use(helmet());
 // Seguridad básica: Prevención de ataques de fuerza bruta y DoS (Rate Limiting)
 const aiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // Límite de 100 peticiones por IP
+  max: 300, // Límite de 100 peticiones por IP
   handler: (req, res, next, options) => {
     R.error(res, options.statusCode, 'Demasiadas solicitudes desde esta IP, por favor intenta más tarde.');
   },
@@ -79,6 +80,7 @@ app.use('/api/forms', formsPublicRouter);
 // Sistema de formularios dinámicos — admin (requieren auth)
 app.use('/api/admin/forms',       formsAdminRouter);
 app.use('/api/admin/submissions', submissionsAdminRouter);
+app.use('/api/admin/webhooks',    webhooksAdminRouter);
 
 
 // ── 404 handler ───────────────────────────────────────────

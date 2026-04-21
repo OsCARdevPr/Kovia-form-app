@@ -2,10 +2,11 @@ import { apiEnvelopeSchema } from './schemas';
 
 const API_BASE = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:3000';
 
-function toRequestError(message, status, errors = null) {
-  const error = new Error(message || 'Request failed');
+function toRequestError(message, status, errors = null, code = '') {
+  const error = new Error(message || 'No se pudo completar la solicitud');
   error.status = status;
   error.errors = errors;
+  error.code = code;
   return error;
 }
 
@@ -35,14 +36,14 @@ export async function request(path, options = {}) {
 
   if (!response.ok) {
     if (parsed.success && parsed.data.status === 'error') {
-      throw toRequestError(parsed.data.message, response.status, parsed.data.errors || null);
+      throw toRequestError(parsed.data.message, response.status, parsed.data.errors || null, parsed.data.code || '');
     }
 
-    throw toRequestError('Could not complete request', response.status);
+    throw toRequestError('No se pudo completar la solicitud', response.status);
   }
 
   if (!parsed.success || parsed.data.status !== 'success') {
-    throw toRequestError('Unexpected API response', response.status || 500);
+    throw toRequestError('Respuesta inesperada del servidor', response.status || 500);
   }
 
   return parsed.data;

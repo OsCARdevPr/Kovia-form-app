@@ -8,6 +8,7 @@ This document defines the standard JSON contract for dynamic forms consumed by t
 - Centralize field capabilities in `field_type_index`.
 - Enable future form builder/editor implementations with a predictable schema.
 - Support input placeholders, mask presets, and validation presets.
+- Standardize slider metadata for `price` questions.
 - Configure final actions after submit (redirect button or embed).
 - Control if a form can be submitted once per identifier and reactivated by admin.
 
@@ -185,6 +186,20 @@ Compatibility note:
   "required_message": "Este campo es obligatorio",
   "options": [],
   "mask": {},
+  "slider": {
+    "min": 1,
+    "max": 100,
+    "step": 1,
+    "prefix": "$",
+    "unitSuffix": " USD",
+    "showPlusAtMax": true,
+    "confirmLabel": "Confirmar valor",
+    "marks": [
+      { "value": 1, "label": "1" },
+      { "value": 50, "label": "50" },
+      { "value": 100, "label": "100+" }
+    ]
+  },
   "validation": {
     "z": []
   },
@@ -209,6 +224,7 @@ Compatibility note:
 - `required_message`: custom message for required validation.
 - `options`: required for `radio`, `checkbox`, `select`.
 - `mask`: IMask options override for masked presets.
+- `slider`: slider config for `price` only.
 - `validation.z`: array of rule objects.
 - `visible_when`: conditional visibility object.
 
@@ -267,6 +283,56 @@ Example:
 }
 ```
 
+## Price Slider (`question.slider`)
+
+Use `question.slider` only when `type` is `price`.
+
+```json
+{
+  "id": "ticketPrice",
+  "type": "price",
+  "label": "Ticket promedio",
+  "required": true,
+  "slider": {
+    "min": 5,
+    "max": 500,
+    "step": 5,
+    "prefix": "$",
+    "unitSuffix": " USD",
+    "showPlusAtMax": true,
+    "confirmLabel": "Confirmar ticket promedio",
+    "marks": [
+      { "value": 5, "label": "$5" },
+      { "value": 100, "label": "$100" },
+      { "value": 500, "label": "$500+" }
+    ]
+  },
+  "validation": {
+    "z": [
+      { "rule": "minValue", "value": 5, "message": "Debe ser al menos 5" },
+      { "rule": "maxValue", "value": 500, "message": "Debe ser 500 o menos" }
+    ]
+  }
+}
+```
+
+Supported `slider` keys:
+
+- `min` (required): numeric lower bound.
+- `max` (required): numeric upper bound. Must be greater than `min`.
+- `step` (optional): positive numeric step.
+- `prefix` (optional): visual prefix, for example `$`.
+- `unitSuffix` (optional): visual suffix, for example ` USD`.
+- `showPlusAtMax` (optional): if `true`, renderer can show `+` when current value reaches max.
+- `confirmLabel` (optional): UX helper text for slider confirmation.
+- `marks` (optional): labeled reference points array with `{ value, label }`.
+
+Validation notes:
+
+- `slider` is rejected for non-`price` question types.
+- `slider.marks[].value` must be inside `[min, max]`.
+- Backend applies slider min/max checks for `price` even when custom rules are not provided.
+
 ## Validation Rules (`validation.z`)
 
 Supported rules:
@@ -285,6 +351,7 @@ Notes:
 
 - Type presets (`telefono`, `email`, `date`, `date-time`, `price`) include built-in validation even without extra rules.
 - `minValue`/`maxValue` are recommended for `price` fields.
+- When `question.slider` is present in `price`, backend also enforces `slider.min` and `slider.max`.
 - For `radio`, `checkbox`, and `select`, use `options` and optionally `enum` rules.
 
 ## Visibility Rules
@@ -310,6 +377,7 @@ Supported operators:
 - Generate field options UI only for `radio`, `checkbox`, `select`.
 - Show placeholder editor for text-like and masked inputs.
 - Show mask override editor only when `mask_preset` exists.
+- For `price`, include slider editor (`min`, `max`, `step`, `prefix`, `unitSuffix`, `confirmLabel`, `marks`).
 - Provide a final action editor for `completion_action` with two modes: redirect and embed.
 - Keep `id` immutable once responses exist in production.
 - Store config versions and migration notes when introducing new presets.

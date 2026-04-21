@@ -364,6 +364,64 @@ body::after {
 
 .form-textarea { min-height: 100px; resize: vertical; }
 
+/* ── Price Slider ─────────────────────── */
+.form-slider {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px 14px 10px;
+}
+
+.form-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.form-slider-value {
+  font-family: var(--font-brand);
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+  color: #fff;
+}
+
+.form-slider-range {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.form-range-input {
+  width: 100%;
+  accent-color: var(--primary-red);
+  cursor: pointer;
+}
+
+.form-slider-marks {
+  position: relative;
+  height: 18px;
+  margin-top: 8px;
+}
+
+.form-slider-mark {
+  position: absolute;
+  transform: translateX(-50%);
+  top: 0;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.form-slider-confirm {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.form-slider.group-error {
+  border-color: rgba(177, 43, 36, 0.4);
+}
+
 /* ── Pills / Multi-select ──────────────── */
 .radio-group, .checkbox-group {
   display: grid;

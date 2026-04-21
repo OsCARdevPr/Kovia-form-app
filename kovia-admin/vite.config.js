@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [tailwindcss(), react()],
+  envPrefix: ['VITE_', 'FORM_'],
   server: {
     port: 5174,
   },

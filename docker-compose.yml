@@ -1,0 +1,123 @@
+# ════════════════════════════════════════════════════════════
+# Kovia — Docker Compose para Dokploy (Producción)
+#
+# Servicios incluidos:
+#   kovia-api   — Express REST API
+#   kovia-form  — Frontend Astro SSR
+#   kovia-admin — Dashboard React SPA servido por nginx
+#
+# Estrategia:
+#   - Base de datos externa gestionada (no se levanta Postgres aquí)
+#   - Secretos cargados desde Dokploy (no versionar .env real)
+#   - Frontends con variables embebidas en build-time
+#
+# IMPORTANTE — Variables baked en build time:
+#   PUBLIC_API_URL, VITE_ADMIN_API_URL y VITE_FORM_URL_BASE se
+#   incrustan en el bundle durante docker build.
+#   Si cambian estas URLs debes reconstruir imágenes de frontend.
+# ════════════════════════════════════════════════════════════
+
+services:
+
+  # ── API (Express + Sequelize) ──────────────────────────────
+  kovia-api:
+    build:
+      context: ./kovia-api
+      dockerfile: Dockerfile
+    image: kovia-api:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+      DB_HOST: ${DB_HOST:?DB_HOST es obligatorio}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:?DB_NAME es obligatorio}
+      DB_USER: ${DB_USER:?DB_USER es obligatorio}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD es obligatorio}
+      DB_DIALECT: ${DB_DIALECT:-postgres}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET es obligatorio}
+      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-kovia_admin_token}
+      AUTH_TOKEN_TTL_HOURS: ${AUTH_TOKEN_TTL_HOURS:-12}
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN es obligatorio}
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - kovia-net
+
+  # ── Form (Astro SSR standalone) ────────────────────────────
+  kovia-form:
+    build:
+      context: ./kovia-form
+      dockerfile: Dockerfile
+      args:
+        PUBLIC_API_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL es obligatorio para build}
+    image: kovia-form:latest
+    restart: unless-stopped
+    depends_on:
+      kovia-api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      HOST: 0.0.0.0
+      PORT: 4321
+      PUBLIC_API_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL es obligatorio}
+    expose:
+      - "4321"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4321/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - kovia-net
+
+  # ── Admin (React SPA → nginx) ──────────────────────────────
+  kovia-admin:
+    build:
+      context: ./kovia-admin
+      dockerfile: Dockerfile
+      args:
+        VITE_ADMIN_API_URL: ${VITE_ADMIN_API_URL:?VITE_ADMIN_API_URL es obligatorio para build}
+        VITE_FORM_URL_BASE: ${VITE_FORM_URL_BASE:?VITE_FORM_URL_BASE es obligatorio para build}
+    image: kovia-admin:latest
+    restart: unless-stopped
+    depends_on:
+      kovia-api:
+        condition: service_healthy
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - kovia-net
+
+# ── Red interna ────────────────────────────────────────────
+networks:
+  kovia-net:
+    driver: bridge

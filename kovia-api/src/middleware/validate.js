@@ -30,6 +30,7 @@ module.exports = (schema) => (req, res, next) => {
       422,
       'Error de validación en los datos enviados',
       result.error.flatten(),  // { fieldErrors: {...}, formErrors: [...] }
+      'VALIDATION_ERROR',
     );
   }
 

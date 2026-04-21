@@ -11,6 +11,9 @@ const controller = require('../controllers/form.admin.controller');
 
 router.use(auth);
 
+// GET /api/admin/submissions
+router.get('/', controller.listAllSubmissions);
+
 // GET /api/admin/submissions/:id
 router.get('/:id', controller.getSubmissionById);
 

@@ -9,6 +9,10 @@ const migrations = [
   require('./003-create-form-submissions'),
   require('./004-add-submission-lock-columns'),
   require('./005-create-users'),
+  require('./006-create-webhooks'),
+  require('./007-create-webhook-form-configs'),
+  require('./008-add-submission-archive-columns'),
+  require('./009-create-webhook-delivery-logs'),
 ];
 
 const migrationNames = [
@@ -17,6 +21,10 @@ const migrationNames = [
   '003-create-form-submissions',
   '004-add-submission-lock-columns',
   '005-create-users',
+  '006-create-webhooks',
+  '007-create-webhook-form-configs',
+  '008-add-submission-archive-columns',
+  '009-create-webhook-delivery-logs',
 ];
 
 async function ensureMigrationsTable(queryInterface, DataTypes) {

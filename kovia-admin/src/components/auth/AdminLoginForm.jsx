@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { Alert, Button, Form, Input, Label, TextField } from '@heroui/react';
+import { Button, Form, Input, Label, TextField } from '@heroui/react';
 
-export default function AdminLoginForm({ onSubmit, isPending, errorMessage = '' }) {
+export default function AdminLoginForm({ onSubmit, isPending }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -13,7 +13,7 @@ export default function AdminLoginForm({ onSubmit, isPending, errorMessage = '' 
   return (
     <Form className="flex w-full flex-col gap-4" onSubmit={handleSubmit}>
       <TextField isRequired name="email" type="email">
-        <Label>Email</Label>
+        <Label>Correo electrónico</Label>
         <Input
           autoComplete="email"
           placeholder="admin@kovia.local"
@@ -24,7 +24,7 @@ export default function AdminLoginForm({ onSubmit, isPending, errorMessage = '' 
       </TextField>
 
       <TextField isRequired name="password" type="password">
-        <Label>Password</Label>
+        <Label>Contraseña</Label>
         <Input
           autoComplete="current-password"
           placeholder="********"
@@ -34,17 +34,8 @@ export default function AdminLoginForm({ onSubmit, isPending, errorMessage = '' 
         />
       </TextField>
 
-      {errorMessage ? (
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{errorMessage}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      ) : null}
-
       <Button fullWidth isPending={isPending} size="lg" type="submit" variant="primary">
-        Sign In
+        Iniciar sesión
       </Button>
     </Form>
   );

@@ -4,6 +4,11 @@ const sequelize = require('../config/database');
 const FormTemplate = require('../models/FormTemplate');
 const Form = require('../models/Form');
 const { discoveryTemplate, discoveryFormConfig } = require('./seed-data/discovery-form-config');
+const {
+  leadQualificationTemplate,
+  leadQualificationForm,
+  leadQualificationFormConfig,
+} = require('./seed-data/lead-qualification-form-config');
 
 
 async function seedDiscoveryForm() {
@@ -44,15 +49,61 @@ async function seedDiscoveryForm() {
   };
 }
 
+async function seedLeadQualificationForm() {
+  const [template] = await FormTemplate.findOrCreate({
+    where: { slug: leadQualificationTemplate.slug },
+    defaults: {
+      name: leadQualificationTemplate.name,
+      slug: leadQualificationTemplate.slug,
+      description: leadQualificationTemplate.description,
+      is_active: true,
+    },
+  });
+
+  const [form, created] = await Form.findOrCreate({
+    where: { slug: leadQualificationForm.slug },
+    defaults: {
+      title: leadQualificationForm.title,
+      slug: leadQualificationForm.slug,
+      template_id: template.id,
+      config: leadQualificationFormConfig,
+      is_active: true,
+    },
+  });
+
+  if (!created) {
+    await form.update({
+      title: leadQualificationForm.title,
+      template_id: template.id,
+      config: leadQualificationFormConfig,
+      is_active: true,
+    });
+  }
+
+  return {
+    template,
+    form,
+    created,
+  };
+}
+
 async function runSeeds() {
   await sequelize.authenticate();
-  const result = await seedDiscoveryForm();
+  const discoveryResult = await seedDiscoveryForm();
+  const leadQualificationResult = await seedLeadQualificationForm();
 
   console.log('[seed] Discovery form ready:', {
-    formId: result.form.id,
-    slug: result.form.slug,
-    templateSlug: result.template.slug,
-    created: result.created,
+    formId: discoveryResult.form.id,
+    slug: discoveryResult.form.slug,
+    templateSlug: discoveryResult.template.slug,
+    created: discoveryResult.created,
+  });
+
+  console.log('[seed] Lead qualification form ready:', {
+    formId: leadQualificationResult.form.id,
+    slug: leadQualificationResult.form.slug,
+    templateSlug: leadQualificationResult.template.slug,
+    created: leadQualificationResult.created,
   });
 }
 
@@ -71,5 +122,6 @@ if (require.main === module) {
 
 module.exports = {
   runSeeds,
-  seedDiscoveryForm
+  seedDiscoveryForm,
+  seedLeadQualificationForm,
 };
