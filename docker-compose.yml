@@ -85,12 +85,6 @@ services:
         condition: service_healthy
     expose:
       - "80"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.kovia-admin.rule=Host(`admin.oscardev.software`)"
-      - "traefik.http.routers.kovia-admin.entrypoints=websecure"
-      - "traefik.http.routers.kovia-admin.tls.certresolver=letsencrypt"
-      - "traefik.http.services.kovia-admin.loadbalancer.server.port=80"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
       interval: 30s
