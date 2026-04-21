@@ -10,6 +10,7 @@ export default defineConfig({
   integrations: [react()],
   server: {
     port: 4321,
+    host: '0.0.0.0',
   },
   vite: {
     server: {
