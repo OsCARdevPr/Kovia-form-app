@@ -54,6 +54,7 @@ services:
         max-file: "5"
     networks:
       - kovia-net
+      - dokploy-network
 
   # ── Form (Astro SSR standalone) ────────────────────────────
   kovia-form:
