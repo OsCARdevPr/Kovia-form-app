@@ -5,7 +5,7 @@ import BackgroundCanvas from './ui/BackgroundCanvas';
 import DiscoveryForm from './DiscoveryForm';
 import '../styles/global.css';
 
-export default function DiscoveryApp() {
+export default function DiscoveryApp({ formSlug }) {
   const [currentStep, setCurrentStep] = useState(0);
 
   const handleStepChange = useCallback((step) => {
@@ -18,7 +18,7 @@ export default function DiscoveryApp() {
       <BackgroundCanvas currentStep={currentStep} />
 
       {/* Formulario multi-step */}
-      <DiscoveryForm onStepChange={handleStepChange} />
+      <DiscoveryForm onStepChange={handleStepChange} formSlug={formSlug} />
     </>
   );
 }

@@ -475,13 +475,31 @@ async function findActiveSubmissionLock(formId, identifier) {
 // ─────────────────────────────────────────────────────────
 
 /**
- * Obtiene un formulario activo por su slug (ruta pública).
+ * Obtiene un formulario activo por slug de formulario.
+ * Si no existe, intenta resolver por slug de template asociado.
  * Retorna null si no existe o está inactivo.
  */
 async function getFormBySlug(slug) {
-  return Form.findOne({
-    where:   { slug, is_active: true },
+  const normalizedSlug = String(slug || '').trim().toLowerCase();
+  if (!normalizedSlug) return null;
+
+  const byFormSlug = await Form.findOne({
+    where: { slug: normalizedSlug, is_active: true },
     include: [{ model: FormTemplate, as: 'template', attributes: ['name', 'slug'] }],
+  });
+
+  if (byFormSlug) return byFormSlug;
+
+  return Form.findOne({
+    where: { is_active: true },
+    include: [{
+      model: FormTemplate,
+      as: 'template',
+      attributes: ['name', 'slug'],
+      required: true,
+      where: { slug: normalizedSlug, is_active: true },
+    }],
+    order: [['updated_at', 'DESC']],
   });
 }
 

@@ -1,17 +1,24 @@
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
+import node from '@astrojs/node';
+
+const apiTarget = process.env.PUBLIC_API_URL || 'http://localhost:3000';
 
 export default defineConfig({
+  output: 'server',
+  adapter: node({ mode: 'standalone' }),
   integrations: [react()],
   server: {
     port: 4321,
   },
   vite: {
-    define: {
-      // La URL de la API del backend
-      'import.meta.env.PUBLIC_API_URL': JSON.stringify(
-        process.env.PUBLIC_API_URL || 'http://localhost:3000'
-      ),
+    server: {
+      proxy: {
+        '/api': {
+          target: apiTarget,
+          changeOrigin: true,
+        },
+      },
     },
   },
 });

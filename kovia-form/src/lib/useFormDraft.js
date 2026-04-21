@@ -3,8 +3,17 @@
 
 import { useEffect, useRef } from 'react';
 
-const DRAFT_KEY  = 'kovia_form_draft';
-const STEP_KEY   = 'kovia_form_step';
+const DRAFT_KEY_PREFIX = 'kovia_form_draft';
+const STEP_KEY_PREFIX = 'kovia_form_step';
+
+function sanitizeDraftNamespace(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-');
+
+  return normalized || 'default';
+}
 
 /**
  * Maneja la persistencia del borrador del formulario en localStorage.
@@ -13,20 +22,29 @@ const STEP_KEY   = 'kovia_form_step';
  * @param {number} currentStep
  * @param {function} setCurrentStep
  * @param {number} totalSteps
+ * @param {string} draftNamespace
  * @returns {{ hasDraft: boolean, clearDraft: function }}
  */
-export function useFormDraft(methods, currentStep, setCurrentStep, totalSteps = 7) {
+export function useFormDraft(methods, currentStep, setCurrentStep, totalSteps = 7, draftNamespace = 'default') {
+  const namespace = sanitizeDraftNamespace(draftNamespace);
+  const draftKey = `${DRAFT_KEY_PREFIX}:${namespace}`;
+  const stepKey = `${STEP_KEY_PREFIX}:${namespace}`;
+
   // ── Restaurar borrador al montar ────────────────────────
   // Usamos una referencia para sólo ejecutarlo una vez
   const restoredRef = useRef(false);
+
+  useEffect(() => {
+    restoredRef.current = false;
+  }, [namespace]);
 
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
 
     try {
-      const rawValues = localStorage.getItem(DRAFT_KEY);
-      const rawStep   = localStorage.getItem(STEP_KEY);
+      const rawValues = localStorage.getItem(draftKey);
+      const rawStep = localStorage.getItem(stepKey);
 
       if (rawValues) {
         const saved = JSON.parse(rawValues);
@@ -44,27 +62,27 @@ export function useFormDraft(methods, currentStep, setCurrentStep, totalSteps = 
     } catch (e) {
       console.warn('[Kovia Draft] No se pudo restaurar el borrador:', e);
     }
-  }, [setCurrentStep, totalSteps]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draftKey, methods, setCurrentStep, stepKey, totalSteps]);
 
   // ── Guardar borrador cuando cambia el step ───────────────
   useEffect(() => {
-    // No guardar en step 0 (intro) ni 8 (success)
-    if (currentStep === 0 || currentStep === 8) return;
+    // No guardar en intro ni al llegar al paso de éxito
+    if (currentStep === 0 || currentStep > totalSteps) return;
 
     try {
       const values = methods.getValues();
-      localStorage.setItem(DRAFT_KEY,  JSON.stringify(values));
-      localStorage.setItem(STEP_KEY,   String(currentStep));
+      localStorage.setItem(draftKey, JSON.stringify(values));
+      localStorage.setItem(stepKey, String(currentStep));
     } catch (e) {
       console.warn('[Kovia Draft] No se pudo guardar el borrador:', e);
     }
-  }, [currentStep]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentStep, draftKey, methods, stepKey, totalSteps]);
 
   // ── Limpiar draft después del submit exitoso ─────────────
   function clearDraft() {
     try {
-      localStorage.removeItem(DRAFT_KEY);
-      localStorage.removeItem(STEP_KEY);
+      localStorage.removeItem(draftKey);
+      localStorage.removeItem(stepKey);
     } catch (e) {
       // Silencioso
     }
@@ -73,7 +91,7 @@ export function useFormDraft(methods, currentStep, setCurrentStep, totalSteps = 
   // ── Detectar si existe un borrador previo ────────────────
   const hasDraft = (() => {
     try {
-      const step = parseInt(localStorage.getItem(STEP_KEY), 10);
+      const step = parseInt(localStorage.getItem(stepKey), 10);
       return step >= 1 && step <= totalSteps;
     } catch {
       return false;

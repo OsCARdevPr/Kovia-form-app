@@ -10,8 +10,24 @@ import { useFormDraft } from '../lib/useFormDraft';
 import ProgressBar from './ui/ProgressBar';
 import FormNavigation from './ui/FormNavigation';
 
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';
-const FORM_SLUG = import.meta.env.PUBLIC_FORM_SLUG || 'kovia-discovery';
+const API_URL = String(import.meta.env.PUBLIC_API_URL || '').trim();
+
+function buildFormEndpoint(formSlug, action = '') {
+  const normalizedSlug = String(formSlug || '').trim();
+  if (!normalizedSlug) return '';
+
+  const encodedSlug = encodeURIComponent(normalizedSlug);
+  const cleanAction = String(action || '').replace(/^\/+/, '');
+  const suffix = cleanAction ? `/${cleanAction}` : '';
+  const path = `/api/forms/${encodedSlug}${suffix}`;
+
+  const baseUrl = API_URL.replace(/\/+$/, '');
+  if (!baseUrl) {
+    return path;
+  }
+
+  return `${baseUrl}${path}`;
+}
 
 const FIELD_TYPE_ALIASES = Object.freeze({
   tel: 'telefono',
@@ -429,7 +445,7 @@ function SuccessStep({ onReset, completionAction }) {
   );
 }
 
-export default function DiscoveryForm({ onStepChange }) {
+export default function DiscoveryForm({ onStepChange, formSlug }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -461,16 +477,28 @@ export default function DiscoveryForm({ onStepChange }) {
 
   const watchedValues = useWatch({ control: methods.control });
 
-  const { hasDraft, clearDraft } = useFormDraft(methods, currentStep, setCurrentStep, safeTotalForDraft);
+  const { hasDraft, clearDraft } = useFormDraft(
+    methods,
+    currentStep,
+    setCurrentStep,
+    safeTotalForDraft,
+    formSlug,
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadDynamicForm() {
       setIsLoadingConfig(true);
+      setSubmitError(null);
 
       try {
-        const response = await fetch(`${API_URL}/api/forms/${FORM_SLUG}`);
+        const endpoint = buildFormEndpoint(formSlug);
+        if (!endpoint) {
+          throw new Error('No se encontró el slug del formulario en la URL.');
+        }
+
+        const response = await fetch(endpoint);
         const payload = await response.json();
 
         if (!response.ok || payload.status !== 'success') {
@@ -511,7 +539,7 @@ export default function DiscoveryForm({ onStepChange }) {
     return () => {
       cancelled = true;
     };
-  }, [methods]);
+  }, [formSlug, methods]);
 
   const validateCurrentStep = useCallback(async () => {
     if (currentStep < 1 || currentStep > totalSteps) return true;
@@ -590,7 +618,12 @@ export default function DiscoveryForm({ onStepChange }) {
     delete payload.herramientas_otro;
 
     try {
-      const res = await fetch(`${API_URL}/api/forms/${FORM_SLUG}/submit`, {
+      const endpoint = buildFormEndpoint(formSlug, 'submit');
+      if (!endpoint) {
+        throw new Error('No se encontró el slug del formulario en la URL.');
+      }
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers: payload }),
@@ -624,7 +657,7 @@ export default function DiscoveryForm({ onStepChange }) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [clearDraft, goToStep, methods, successStep, validateCurrentStep]);
+  }, [clearDraft, formSlug, goToStep, methods, successStep, validateCurrentStep]);
 
   const handleReset = useCallback(() => {
     clearDraft();

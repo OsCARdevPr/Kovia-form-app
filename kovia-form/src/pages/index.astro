@@ -1,6 +1,4 @@
 ---
-// src/pages/index.astro
-import DiscoveryApp from '../components/DiscoveryApp';
 import '../styles/global.css';
 ---
 <!DOCTYPE html>
@@ -8,16 +6,18 @@ import '../styles/global.css';
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kovia — Discovery Form | Pre-Onboarding</title>
-  <meta name="description" content="Formulario de discovery pre-reunión de Kovia. Completa este formulario antes de tu reunión para que preparemos tu análisis de flujo de ventas." />
+  <title>Kovia Forms</title>
+  <meta name="description" content="Abrir formularios dinámicos de Kovia por slug en la URL." />
   <meta name="theme-color" content="#090a0e" />
   <link rel="icon" type="image/png" href="/kovia-ghost.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <!-- Isla React: renderiza canvas + formulario directamente en el árbol React -->
-  <DiscoveryApp client:load />
+  <main style="min-height:100vh;display:grid;place-items:center;padding:2rem;background:#090a0e;color:#e2e8f0;font-family:'JetBrains Mono',monospace;">
+    <section style="max-width:760px;text-align:center;line-height:1.7;">
+      <h1 style="font-family:'Orbitron',sans-serif;letter-spacing:.08em;">Kovia Forms</h1>
+      <p>Esta aplicación ahora funciona por slug en URL.</p>
+      <p>Abre tu formulario en <strong>/SLUG</strong> por ejemplo: <strong>/kovia-discovery</strong>.</p>
+    </section>
+  </main>
 </body>
 </html>
