@@ -46,4 +46,4 @@ EXPOSE 4321
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -qO- http://localhost:4321/ || exit 1
 
-CMD ["node", "./dist/server/entry.mjs"]
+CMD ["sh", "-c", "HOST=0.0.0.0 PORT=4321 node ./dist/server/entry.mjs"]
