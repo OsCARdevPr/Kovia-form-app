@@ -23,7 +23,7 @@ export async function listWebhooks() {
 export async function createWebhook(data) {
   const payload = await request('/api/admin/webhooks', {
     method: 'POST',
-    body:   JSON.stringify(data),
+    body: data,
   });
   return payload.data;
 }
@@ -51,7 +51,7 @@ export async function retryWebhookLog(webhookId, logId) {
 export async function updateWebhook(id, data) {
   const payload = await request(`/api/admin/webhooks/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    body:   JSON.stringify(data),
+    body: data,
   });
   return payload.data;
 }
@@ -66,7 +66,7 @@ export async function deleteWebhook(id) {
 export async function upsertWebhookFormConfig(webhookId, formId, config) {
   const payload = await request(
     `/api/admin/webhooks/${encodeURIComponent(webhookId)}/forms/${encodeURIComponent(formId)}`,
-    { method: 'PUT', body: JSON.stringify(config) },
+    { method: 'PUT', body: config },
   );
   return payload.data;
 }

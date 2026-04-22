@@ -44,16 +44,17 @@ Fuente de verdad unica:
 ## Algoritmo de construccion JSON -> Formulario
 1. Obtener configuracion con `GET /api/forms/:slug`.
 2. Tomar `config` como objeto principal; si falta, usar objeto vacio.
-3. Leer `steps` como arreglo; si no es arreglo, tratar como sin pasos.
-4. Ordenar navegacion por `step.order` ascendente.
-5. En cada paso, iterar `questions` en el orden declarado.
-6. Para cada `question`, resolver tipo, placeholder, mascara, validacion y visibilidad.
-7. Construir schema dinamico por paso usando `question.id` como llave.
-8. Validar por paso antes de avanzar.
-9. Al enviar, construir payload como `{"answers": {...}}` usando ids exactos.
-10. Procesar pantalla final con `completion_action` (`redirect` o `embed`).
-11. Si hay `redirect_params`, construir query params desde respuestas enviadas.
-12. Mantener compatibilidad con aliases y claves legacy cuando existan.
+3. Resolver `intro_screen` para textos del header e intro (usar defaults si faltan claves).
+4. Leer `steps` como arreglo; si no es arreglo, tratar como sin pasos.
+5. Ordenar navegacion por `step.order` ascendente.
+6. En cada paso, iterar `questions` en el orden declarado.
+7. Para cada `question`, resolver tipo, placeholder, mascara, validacion y visibilidad.
+8. Construir schema dinamico por paso usando `question.id` como llave.
+9. Validar por paso antes de avanzar.
+10. Al enviar, construir payload como `{"answers": {...}}` usando ids exactos.
+11. Procesar pantalla final con `completion_action` (`redirect` o `embed`).
+12. Si hay `redirect_params`, construir query params desde respuestas enviadas.
+13. Mantener compatibilidad con aliases y claves legacy cuando existan.
 
 ## Estructura raiz esperada del JSON
 Campos principales esperados en `config`:
@@ -62,11 +63,33 @@ Campos principales esperados en `config`:
 - `field_type_index`
 - `submission_policy`
 - `completion_action`
+- `intro_screen`
 - `steps`
 
 Regla de robustez:
 - Si una clave no existe, aplicar defaults seguros sin romper render.
 - Nunca renombrar ni regenerar IDs existentes.
+
+## Traduccion de `intro_screen`
+`intro_screen` define textos de la pantalla inicial (antes del paso 1).
+
+Claves esperadas:
+- `brand_text`
+- `subtitle_text`
+- `lead_text`
+- `support_prefix_text`
+- `support_highlight_primary_text`
+- `support_middle_text`
+- `support_highlight_secondary_text`
+- `support_suffix_text`
+- `estimated_time_text`
+- `start_button_text`
+- `loading_button_text`
+
+Reglas:
+- Si una clave viene vacia o no existe, usar fallback por defecto.
+- `support_*` se renderiza como un solo parrafo con 2 segmentos destacados.
+- `loading_button_text` se usa solo cuando el frontend esta cargando config.
 
 ## Traduccion de `field_type_index`
 `field_type_index` define como interpretar cada `question.type`.
@@ -287,6 +310,6 @@ nextThoughtNeeded=true
 ```
 
 ## Prompt sugerido para IA
-"Analiza el JSON del formulario {{FORM_TITLE}} (slug {{FORM_SLUG}}) y explica como construir el motor de render y validacion: traduccion de tipos, masks, slider, visible_when, validation.z, submit y completion_action. No describas pregunta por pregunta; describe reglas de implementacion reutilizables y compatibles con el contrato actual."
+"Analiza el JSON del formulario {{FORM_TITLE}} (slug {{FORM_SLUG}}) y explica como construir el motor de render y validacion: intro_screen, traduccion de tipos, masks, slider, visible_when, validation.z, submit y completion_action. No describas pregunta por pregunta; describe reglas de implementacion reutilizables y compatibles con el contrato actual."
 
 Generado: {{GENERATED_AT}}

@@ -32,6 +32,20 @@ const FORM_URL_BASE = String(import.meta.env.FORM_URL_BASE || import.meta.env.VI
 const EMBED_SANDBOX_ATTR = 'allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox';
 const EMBED_ALLOW_ATTR_BASE = 'fullscreen';
 
+const DEFAULT_INTRO_SCREEN_CONFIG = {
+  brand_text: 'Kovia',
+  subtitle_text: 'Pre-Onboarding',
+  lead_text: 'Antes de nuestra reunión, completa este formulario.',
+  support_prefix_text: 'Con esta información',
+  support_highlight_primary_text: 'trazaremos tu flujo de ventas actual',
+  support_middle_text: 'y llegaremos con un',
+  support_highlight_secondary_text: 'borrador listo',
+  support_suffix_text: 'para revisar juntos.',
+  estimated_time_text: '≈ 8 minutos',
+  start_button_text: 'Comenzar',
+  loading_button_text: 'Cargando...',
+};
+
 const DEFAULT_CONFIG = {
   version: 1,
   validation_engine: 'z-rules-v1',
@@ -55,6 +69,7 @@ const DEFAULT_CONFIG = {
     enabled: true, once_per_identifier: true, identifier_strategy: 'ip_then_header',
     identifier_header: 'x-form-identifier', allow_reactivation: true,
   },
+  intro_screen: { ...DEFAULT_INTRO_SCREEN_CONFIG },
   steps: [],
 };
 
@@ -221,6 +236,18 @@ function normalizeRedirectParams(rawParams) {
     .filter(Boolean);
 }
 
+function normalizeIntroScreenConfig(rawIntroScreen) {
+  const source = rawIntroScreen && typeof rawIntroScreen === 'object' ? rawIntroScreen : {};
+  const normalized = {};
+
+  for (const [key, fallback] of Object.entries(DEFAULT_INTRO_SCREEN_CONFIG)) {
+    const candidate = typeof source[key] === 'string' ? source[key].trim() : '';
+    normalized[key] = candidate || fallback;
+  }
+
+  return normalized;
+}
+
 function normalizeQuestion(question, index) {
   const normalizedType = String(question?.type || 'text').trim() || 'text';
   const meta = getTypeMeta(normalizedType);
@@ -270,6 +297,7 @@ function normalizeConfigForEditor(rawConfig) {
   const safe = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
   const ca   = safe.completion_action  && typeof safe.completion_action  === 'object' ? safe.completion_action  : {};
   const sp   = safe.submission_policy  && typeof safe.submission_policy  === 'object' ? safe.submission_policy  : {};
+  const intro = safe.intro_screen && typeof safe.intro_screen === 'object' ? safe.intro_screen : {};
 
   const normalizedCompletionAction = {
     ...DEFAULT_CONFIG.completion_action,
@@ -282,6 +310,7 @@ function normalizeConfigForEditor(rawConfig) {
     field_type_index:  { ...DEFAULT_CONFIG.field_type_index,  ...(safe.field_type_index  || {}) },
     completion_action: normalizedCompletionAction,
     submission_policy: { ...DEFAULT_CONFIG.submission_policy, ...sp },
+    intro_screen: normalizeIntroScreenConfig(intro),
     steps: (Array.isArray(safe.steps) ? safe.steps : []).map((step, i) => ({
       ...step,
       order:       i + 1,
@@ -911,6 +940,183 @@ function AdvancedSettingsModal({ isOpen, onClose, config, onUpdateCompletionActi
   );
 }
 
+const INTRO_SCREEN_HEADER_FIELDS = [
+  { key: 'brand_text', label: 'Marca / logo texto', placeholder: 'Kovia' },
+  { key: 'subtitle_text', label: 'Subtitulo', placeholder: 'Pre-Onboarding' },
+];
+
+const INTRO_SCREEN_SUPPORT_FIELDS = [
+  { key: 'support_prefix_text', label: 'Inicio del texto secundario' },
+  { key: 'support_highlight_primary_text', label: 'Texto destacado 1' },
+  { key: 'support_middle_text', label: 'Texto intermedio' },
+  { key: 'support_highlight_secondary_text', label: 'Texto destacado 2' },
+];
+
+const INTRO_SCREEN_CTA_FIELDS = [
+  { key: 'estimated_time_text', label: 'Tiempo estimado', placeholder: '≈ 8 minutos' },
+  { key: 'start_button_text', label: 'Boton iniciar', placeholder: 'Comenzar' },
+  { key: 'loading_button_text', label: 'Boton cargando', placeholder: 'Cargando...' },
+];
+
+function resolveIntroScreenPreviewValue(source, key) {
+  const candidate = String(source?.[key] || '').trim();
+  return candidate || DEFAULT_INTRO_SCREEN_CONFIG[key];
+}
+
+function IntroScreenField({ field, value, onChange }) {
+  return (
+    <FieldRow label={field.label}>
+      <input
+        className="kovia-input"
+        value={value}
+        onChange={(event) => onChange(field.key, event.target.value)}
+        placeholder={field.placeholder || ''}
+      />
+    </FieldRow>
+  );
+}
+
+function IntroScreenShadowPreview({ source }) {
+  const previewBrandText = resolveIntroScreenPreviewValue(source, 'brand_text');
+  const previewSubtitleText = resolveIntroScreenPreviewValue(source, 'subtitle_text');
+  const previewLeadText = resolveIntroScreenPreviewValue(source, 'lead_text');
+  const previewSupportPrefixText = resolveIntroScreenPreviewValue(source, 'support_prefix_text');
+  const previewSupportHighlightPrimaryText = resolveIntroScreenPreviewValue(source, 'support_highlight_primary_text');
+  const previewSupportMiddleText = resolveIntroScreenPreviewValue(source, 'support_middle_text');
+  const previewSupportHighlightSecondaryText = resolveIntroScreenPreviewValue(source, 'support_highlight_secondary_text');
+  const previewSupportSuffixText = resolveIntroScreenPreviewValue(source, 'support_suffix_text');
+  const previewEstimatedTimeText = resolveIntroScreenPreviewValue(source, 'estimated_time_text');
+  const previewStartButtonText = resolveIntroScreenPreviewValue(source, 'start_button_text');
+
+  return (
+    <div className="rounded-xl border border-default-200 bg-default-50 p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-default-500">Shadow preview</p>
+        <span className="text-[11px] text-default-400">Vista previa en vivo</span>
+      </div>
+
+      <div className="rounded-2xl border border-default-200 bg-white p-4 shadow-xl">
+        <div className="mb-4 border-b border-default-200 pb-3">
+          <h3 className="text-base font-black tracking-wide text-default-900">{previewBrandText}</h3>
+          <p className="mt-1 text-sm font-semibold text-default-500">{previewSubtitleText}</p>
+        </div>
+
+        <div className="space-y-3 text-sm text-default-700">
+          <p>{previewLeadText}</p>
+          <p>
+            {previewSupportPrefixText}{' '}
+            <strong>{previewSupportHighlightPrimaryText}</strong>{' '}
+            {previewSupportMiddleText}{' '}
+            <strong>{previewSupportHighlightSecondaryText}</strong>{' '}
+            {previewSupportSuffixText}
+          </p>
+
+          <div className="inline-flex items-center gap-2 rounded-full bg-default-100 px-3 py-1 text-xs font-medium text-default-600">
+            <span aria-hidden="true">🕒</span>
+            <span>{previewEstimatedTimeText}</span>
+          </div>
+
+          <div className="pt-1">
+            <button type="button" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md">
+              {previewStartButtonText}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IntroScreenModal({ isOpen, onClose, introScreen, onUpdateIntroScreen }) {
+  const source = introScreen && typeof introScreen === 'object'
+    ? introScreen
+    : DEFAULT_INTRO_SCREEN_CONFIG;
+
+  function updateField(field, value) {
+    onUpdateIntroScreen({ [field]: value });
+  }
+
+  return (
+    <Modal>
+      <Modal.Backdrop isOpen={isOpen} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+        <Modal.Container placement="center" size="4xl">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading>Pantalla de inicio</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
+              <div className="flex flex-col gap-4">
+                <p className="text-sm text-default-500">
+                  Personaliza los textos del header e introduccion que ve el usuario antes de empezar el formulario.
+                </p>
+
+                <SectionDivider label="Header" />
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {INTRO_SCREEN_HEADER_FIELDS.map((field) => (
+                    <IntroScreenField
+                      key={field.key}
+                      field={field}
+                      value={String(source[field.key] || '')}
+                      onChange={updateField}
+                    />
+                  ))}
+                </div>
+
+                <SectionDivider label="Introduccion" />
+                <FieldRow label="Texto principal">
+                  <textarea
+                    className="kovia-textarea"
+                    rows={2}
+                    value={String(source.lead_text || '')}
+                    onChange={(event) => updateField('lead_text', event.target.value)}
+                  />
+                </FieldRow>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {INTRO_SCREEN_SUPPORT_FIELDS.map((field) => (
+                    <IntroScreenField
+                      key={field.key}
+                      field={field}
+                      value={String(source[field.key] || '')}
+                      onChange={updateField}
+                    />
+                  ))}
+                </div>
+
+                <FieldRow label="Cierre del texto secundario">
+                  <input
+                    className="kovia-input"
+                    value={String(source.support_suffix_text || '')}
+                    onChange={(event) => updateField('support_suffix_text', event.target.value)}
+                  />
+                </FieldRow>
+
+                <SectionDivider label="CTA" />
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  {INTRO_SCREEN_CTA_FIELDS.map((field) => (
+                    <IntroScreenField
+                      key={field.key}
+                      field={field}
+                      value={String(source[field.key] || '')}
+                      onChange={updateField}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <IntroScreenShadowPreview source={source} />
+            </Modal.Body>
+            <Modal.Footer>
+              <Button slot="close" variant="secondary">Cerrar</Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
+}
+
 // ─── JSON modal ───────────────────────────────────────────────────────────────
 
 function JsonModal({ isOpen, onClose, jsonDraft, onChangeJson, onApply, onExport, onImportFile, onDuplicate }) {
@@ -1146,6 +1352,7 @@ export default function AdminFormBuilderPage() {
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(null);
 
   const [showSettings, setShowSettings] = useState(false);
+  const [showIntroScreen, setShowIntroScreen] = useState(false);
   const [showJson,     setShowJson]     = useState(false);
   const [showEmbed,    setShowEmbed]    = useState(false);
 
@@ -1198,6 +1405,13 @@ export default function AdminFormBuilderPage() {
 
   function updateSubmissionPolicy(patch) {
     syncJson({ ...config, submission_policy: { ...(config.submission_policy || {}), ...patch } });
+  }
+
+  function updateIntroScreen(patch) {
+    syncJson({
+      ...config,
+      intro_screen: normalizeIntroScreenConfig({ ...(config.intro_screen || {}), ...patch }),
+    });
   }
 
   function updateStep(patch) {
@@ -1400,6 +1614,7 @@ export default function AdminFormBuilderPage() {
           <Button as={Link} size="sm" variant="ghost" to={`/forms/${templateId}`}>← Volver</Button>
           <Button size="sm" variant="secondary" onPress={() => setShowJson(true)}>{'</>'} JSON</Button>
           <Button size="sm" variant="secondary" onPress={() => setShowEmbed(true)}>🔗 Embed</Button>
+          <Button size="sm" variant="secondary" onPress={() => setShowIntroScreen(true)}>🪄 Inicio</Button>
           <Button size="sm" variant="secondary" onPress={() => setShowSettings(true)}>⚙️ Ajustes</Button>
           <Button
             size="sm"
@@ -1567,6 +1782,13 @@ export default function AdminFormBuilderPage() {
         config={config}
         onUpdateCompletionAction={updateCompletionAction}
         onUpdateSubmissionPolicy={updateSubmissionPolicy}
+      />
+
+      <IntroScreenModal
+        isOpen={showIntroScreen}
+        onClose={() => setShowIntroScreen(false)}
+        introScreen={config?.intro_screen}
+        onUpdateIntroScreen={updateIntroScreen}
       />
 
       <JsonModal

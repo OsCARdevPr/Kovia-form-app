@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { stepSchemas as fallbackStepSchemas, buildStepSchemasFromConfig } from '../../lib/schemas';
-import { buildDefaultValues, buildFormEndpoint } from './formUtils';
+import { buildDefaultValues, buildFormEndpoint, resolveIntroScreen } from './formUtils';
 
 export function useDynamicFormConfig({
   formSlug,
@@ -11,6 +11,7 @@ export function useDynamicFormConfig({
   const [dynamicStepSchemas, setDynamicStepSchemas] = useState(fallbackStepSchemas);
   const [dynamicFormTitle, setDynamicFormTitle] = useState('Discovery Form');
   const [dynamicConfig, setDynamicConfig] = useState({ steps: [] });
+  const [dynamicIntroScreen, setDynamicIntroScreen] = useState(resolveIntroScreen({}));
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export function useDynamicFormConfig({
         const defaultValues = buildDefaultValues(config);
 
         setDynamicConfig(config);
+        setDynamicIntroScreen(resolveIntroScreen(config));
         setDynamicStepSchemas(Object.keys(parsedSchemas).length > 0 ? parsedSchemas : fallbackStepSchemas);
 
         if (payload?.data?.title) {
@@ -76,6 +78,7 @@ export function useDynamicFormConfig({
   return {
     dynamicConfig,
     dynamicFormTitle,
+    dynamicIntroScreen,
     dynamicStepSchemas,
     isLoadingConfig,
   };

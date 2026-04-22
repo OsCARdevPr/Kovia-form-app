@@ -39,6 +39,7 @@ export default function DiscoveryForm({ onStepChange, formSlug }) {
   const {
     dynamicConfig,
     dynamicFormTitle,
+    dynamicIntroScreen,
     dynamicStepSchemas,
     isLoadingConfig,
   } = useDynamicFormConfig({
@@ -226,7 +227,13 @@ export default function DiscoveryForm({ onStepChange, formSlug }) {
 
   const renderStep = () => {
     if (currentStep === 0) {
-      return <DiscoveryFormIntroStep onStart={handleStart} isLoadingConfig={isLoadingConfig} />;
+      return (
+        <DiscoveryFormIntroStep
+          onStart={handleStart}
+          isLoadingConfig={isLoadingConfig}
+          introScreen={dynamicIntroScreen}
+        />
+      );
     }
 
     if (currentStep === successStep && totalSteps > 0) {
@@ -265,7 +272,7 @@ export default function DiscoveryForm({ onStepChange, formSlug }) {
     <FormProvider {...methods}>
       <div className="app-container">
         <div className="form-wrapper">
-          <DiscoveryFormHeader dynamicFormTitle={dynamicFormTitle} />
+          <DiscoveryFormHeader dynamicFormTitle={dynamicFormTitle} introScreen={dynamicIntroScreen} />
 
           {hasDraft && !draftBannerDismissed && currentStep >= 1 && currentStep <= totalSteps && (
             <DiscoveryFormDraftBanner onDismiss={() => setDraftBannerDismissed(true)} />

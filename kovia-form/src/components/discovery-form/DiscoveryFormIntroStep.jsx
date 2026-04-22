@@ -1,23 +1,33 @@
-export default function DiscoveryFormIntroStep({ onStart, isLoadingConfig }) {
+export default function DiscoveryFormIntroStep({ onStart, isLoadingConfig, introScreen }) {
+  const leadText = introScreen?.leadText || 'Antes de nuestra reunión, completa este formulario.';
+  const supportPrefixText = introScreen?.supportPrefixText || 'Con esta información';
+  const supportHighlightPrimaryText = introScreen?.supportHighlightPrimaryText || 'trazaremos tu flujo de ventas actual';
+  const supportMiddleText = introScreen?.supportMiddleText || 'y llegaremos con un';
+  const supportHighlightSecondaryText = introScreen?.supportHighlightSecondaryText || 'borrador listo';
+  const supportSuffixText = introScreen?.supportSuffixText || 'para revisar juntos.';
+  const estimatedTimeText = introScreen?.estimatedTimeText || '≈ 8 minutos';
+  const startButtonText = introScreen?.startButtonText || 'Comenzar';
+  const loadingButtonText = introScreen?.loadingButtonText || 'Cargando...';
+
   return (
     <section className="form-section active" data-step="0" id="step-0">
       <div className="intro-content">
-        <p>Antes de nuestra reunión, completa este formulario.</p>
+        <p>{leadText}</p>
         <div className="intro-divider" />
         <p>
-          Con esta información <strong>trazaremos tu flujo de ventas actual</strong> y llegaremos con un
-          <strong> borrador listo</strong> para revisar juntos.
+          {supportPrefixText} <strong>{supportHighlightPrimaryText}</strong> {supportMiddleText}
+          <strong> {supportHighlightSecondaryText}</strong> {` ${supportSuffixText}`}
         </p>
         <div className="intro-time">
           <svg viewBox="0 0 24 24" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          <span>≈ 8 minutos</span>
+          <span>{estimatedTimeText}</span>
         </div>
         <div className="intro-cta">
           <button type="button" className="btn btn-primary" id="btnStart" onClick={onStart} disabled={isLoadingConfig}>
-            <span className="btn-text">{isLoadingConfig ? 'Cargando...' : 'Comenzar'}</span>
+            <span className="btn-text">{isLoadingConfig ? loadingButtonText : startButtonText}</span>
             <svg
               width="16"
               height="16"

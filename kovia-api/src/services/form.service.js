@@ -93,6 +93,20 @@ const SUPPORTED_QUESTION_TYPES = Object.freeze([
   'price',
 ]);
 
+const DEFAULT_INTRO_SCREEN_CONFIG = Object.freeze({
+  brand_text: 'Kovia',
+  subtitle_text: 'Pre-Onboarding',
+  lead_text: 'Antes de nuestra reunión, completa este formulario.',
+  support_prefix_text: 'Con esta información',
+  support_highlight_primary_text: 'trazaremos tu flujo de ventas actual',
+  support_middle_text: 'y llegaremos con un',
+  support_highlight_secondary_text: 'borrador listo',
+  support_suffix_text: 'para revisar juntos.',
+  estimated_time_text: '≈ 8 minutos',
+  start_button_text: 'Comenzar',
+  loading_button_text: 'Cargando...',
+});
+
 const zRuleSchema = z.object({
   rule: z.enum(['min', 'max', 'minItems', 'maxItems', 'regex', 'email', 'minValue', 'maxValue', 'enum']),
   value: z.any().optional(),
@@ -176,10 +190,25 @@ const stepConfigSchema = z.object({
   questions: z.array(questionConfigSchema),
 });
 
+const introScreenConfigSchema = z.object({
+  brand_text: z.string().optional(),
+  subtitle_text: z.string().optional(),
+  lead_text: z.string().optional(),
+  support_prefix_text: z.string().optional(),
+  support_highlight_primary_text: z.string().optional(),
+  support_middle_text: z.string().optional(),
+  support_highlight_secondary_text: z.string().optional(),
+  support_suffix_text: z.string().optional(),
+  estimated_time_text: z.string().optional(),
+  start_button_text: z.string().optional(),
+  loading_button_text: z.string().optional(),
+}).optional();
+
 const formConfigSchema = z.object({
   version: z.number().int().positive().optional().default(1),
   validation_engine: z.string().optional().default('z-rules-v1'),
   field_type_index: z.record(z.string(), z.any()).optional().default({}),
+  intro_screen: introScreenConfigSchema,
   completion_action: z.record(z.string(), z.any()).optional(),
   submission_policy: z.object({
     enabled: z.boolean().optional(),
@@ -249,6 +278,18 @@ function toFieldErrorsFromZodError(error) {
   return fieldErrors;
 }
 
+function normalizeIntroScreen(rawIntroScreen) {
+  const source = rawIntroScreen && typeof rawIntroScreen === 'object' ? rawIntroScreen : {};
+  const normalized = {};
+
+  for (const [key, fallback] of Object.entries(DEFAULT_INTRO_SCREEN_CONFIG)) {
+    const candidate = typeof source[key] === 'string' ? source[key].trim() : '';
+    normalized[key] = candidate || fallback;
+  }
+
+  return normalized;
+}
+
 function normalizeFormConfig(rawConfig) {
   const parsed = formConfigSchema.safeParse(rawConfig || {});
   if (!parsed.success) {
@@ -262,6 +303,7 @@ function normalizeFormConfig(rawConfig) {
   const config = parsed.data;
   return {
     ...config,
+    intro_screen: normalizeIntroScreen(config.intro_screen),
     steps: config.steps.map((step) => ({
       ...step,
       questions: step.questions.map((question) => ({

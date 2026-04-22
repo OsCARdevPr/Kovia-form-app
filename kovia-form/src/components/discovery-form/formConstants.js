@@ -40,9 +40,24 @@ const BUILTIN_FIELD_TYPE_INDEX = Object.freeze({
   },
 });
 
+const DEFAULT_INTRO_SCREEN_CONFIG = Object.freeze({
+  brand_text: 'Kovia',
+  subtitle_text: 'Pre-Onboarding',
+  lead_text: 'Antes de nuestra reunión, completa este formulario.',
+  support_prefix_text: 'Con esta información',
+  support_highlight_primary_text: 'trazaremos tu flujo de ventas actual',
+  support_middle_text: 'y llegaremos con un',
+  support_highlight_secondary_text: 'borrador listo',
+  support_suffix_text: 'para revisar juntos.',
+  estimated_time_text: '≈ 8 minutos',
+  start_button_text: 'Comenzar',
+  loading_button_text: 'Cargando...',
+});
+
 export {
   API_URL,
   FORM_SUBMISSION_ID_SOURCE_FIELD,
   FIELD_TYPE_ALIASES,
   BUILTIN_FIELD_TYPE_INDEX,
+  DEFAULT_INTRO_SCREEN_CONFIG,
 };

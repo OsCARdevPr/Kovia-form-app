@@ -35,7 +35,7 @@ export async function listTemplates(options = {}) {
 export async function createTemplate(body) {
   const payload = await request('/api/admin/forms/templates', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body,
   });
 
   return createTemplateResponseSchema.parse(payload).data;
@@ -54,7 +54,7 @@ export async function getFormById(id) {
 export async function createForm(body) {
   const payload = await request('/api/admin/forms', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body,
   });
 
   return createFormResponseSchema.parse(payload).data;
@@ -63,7 +63,7 @@ export async function createForm(body) {
 export async function updateForm(id, body) {
   const payload = await request(`/api/admin/forms/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    body: JSON.stringify(body),
+    body,
   });
 
   return formDetailResponseSchema.parse(payload).data;
@@ -104,7 +104,7 @@ export async function archiveFormWebhooks(id) {
 export async function importForm(body) {
   const payload = await request('/api/admin/forms/import', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body,
   });
 
   return importFormResponseSchema.parse(payload).data;
@@ -130,7 +130,7 @@ export async function getFormAiContextMarkdown(id, options = {}) {
 export async function validateFormConfig(config) {
   const payload = await request('/api/admin/forms/validate-config', {
     method: 'POST',
-    body: JSON.stringify({ config }),
+    body: { config },
   });
 
   return validateFormConfigResponseSchema.parse(payload).data;

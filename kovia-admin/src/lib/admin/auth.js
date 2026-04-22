@@ -4,7 +4,7 @@ import { authResponseSchema, formsAccessResponseSchema } from './schemas';
 export async function loginAdmin(credentials) {
   const payload = await request('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify(credentials),
+    body: credentials,
   });
 
   return authResponseSchema.parse(payload).data.user;
@@ -18,7 +18,7 @@ export async function getCurrentAdmin() {
 export async function logoutAdmin() {
   await request('/api/auth/logout', {
     method: 'POST',
-    body: JSON.stringify({}),
+    body: {},
   });
 }
 

@@ -2,6 +2,7 @@ import IMask from 'imask';
 import {
   API_URL,
   BUILTIN_FIELD_TYPE_INDEX,
+  DEFAULT_INTRO_SCREEN_CONFIG,
   FIELD_TYPE_ALIASES,
 } from './formConstants';
 
@@ -372,6 +373,31 @@ function normalizeCompletionAction(rawAction) {
   return null;
 }
 
+function pickIntroText(value, fallback) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  return normalized || fallback;
+}
+
+function resolveIntroScreen(config) {
+  const rawIntro = config?.intro_screen && typeof config.intro_screen === 'object'
+    ? config.intro_screen
+    : {};
+
+  return {
+    brandText: pickIntroText(rawIntro.brand_text, DEFAULT_INTRO_SCREEN_CONFIG.brand_text),
+    subtitleText: pickIntroText(rawIntro.subtitle_text, DEFAULT_INTRO_SCREEN_CONFIG.subtitle_text),
+    leadText: pickIntroText(rawIntro.lead_text, DEFAULT_INTRO_SCREEN_CONFIG.lead_text),
+    supportPrefixText: pickIntroText(rawIntro.support_prefix_text, DEFAULT_INTRO_SCREEN_CONFIG.support_prefix_text),
+    supportHighlightPrimaryText: pickIntroText(rawIntro.support_highlight_primary_text, DEFAULT_INTRO_SCREEN_CONFIG.support_highlight_primary_text),
+    supportMiddleText: pickIntroText(rawIntro.support_middle_text, DEFAULT_INTRO_SCREEN_CONFIG.support_middle_text),
+    supportHighlightSecondaryText: pickIntroText(rawIntro.support_highlight_secondary_text, DEFAULT_INTRO_SCREEN_CONFIG.support_highlight_secondary_text),
+    supportSuffixText: pickIntroText(rawIntro.support_suffix_text, DEFAULT_INTRO_SCREEN_CONFIG.support_suffix_text),
+    estimatedTimeText: pickIntroText(rawIntro.estimated_time_text, DEFAULT_INTRO_SCREEN_CONFIG.estimated_time_text),
+    startButtonText: pickIntroText(rawIntro.start_button_text, DEFAULT_INTRO_SCREEN_CONFIG.start_button_text),
+    loadingButtonText: pickIntroText(rawIntro.loading_button_text, DEFAULT_INTRO_SCREEN_CONFIG.loading_button_text),
+  };
+}
+
 function resolveCompletionAction(config) {
   const configuredAction = normalizeCompletionAction(config?.completion_action);
   if (configuredAction) return configuredAction;
@@ -432,6 +458,7 @@ export {
   isQuestionVisible,
   normalizeFieldType,
   normalizeSliderConfig,
+  resolveIntroScreen,
   resolveCompletionAction,
   resolvePlaceholder,
   toFiniteNumber,

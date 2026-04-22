@@ -72,6 +72,19 @@ This document defines the standard JSON contract for dynamic forms consumed by t
     "identifier_header": "x-form-identifier",
     "allow_reactivation": true
   },
+  "intro_screen": {
+    "brand_text": "Kovia",
+    "subtitle_text": "Pre-Onboarding",
+    "lead_text": "Antes de nuestra reunion, completa este formulario.",
+    "support_prefix_text": "Con esta informacion",
+    "support_highlight_primary_text": "trazaremos tu flujo de ventas actual",
+    "support_middle_text": "y llegaremos con un",
+    "support_highlight_secondary_text": "borrador listo",
+    "support_suffix_text": "para revisar juntos.",
+    "estimated_time_text": "≈ 8 minutos",
+    "start_button_text": "Comenzar",
+    "loading_button_text": "Cargando..."
+  },
   "steps": []
 }
 ```
@@ -109,6 +122,47 @@ Behavior:
 - Lock is per form, not global.
 - If the user already submitted that form, submit returns `409`.
 - Reactivation unlocks the identifier only for that form.
+
+## Intro Screen
+
+`intro_screen` controls the copy shown before step 1 in the public form.
+
+```json
+{
+  "intro_screen": {
+    "brand_text": "Kovia",
+    "subtitle_text": "Pre-Onboarding",
+    "lead_text": "Antes de nuestra reunion, completa este formulario.",
+    "support_prefix_text": "Con esta informacion",
+    "support_highlight_primary_text": "trazaremos tu flujo de ventas actual",
+    "support_middle_text": "y llegaremos con un",
+    "support_highlight_secondary_text": "borrador listo",
+    "support_suffix_text": "para revisar juntos.",
+    "estimated_time_text": "≈ 8 minutos",
+    "start_button_text": "Comenzar",
+    "loading_button_text": "Cargando..."
+  }
+}
+```
+
+Supported keys:
+
+- `brand_text`: brand text in header.
+- `subtitle_text`: subtitle below form title.
+- `lead_text`: first intro paragraph.
+- `support_prefix_text`: first segment of secondary paragraph.
+- `support_highlight_primary_text`: highlighted segment 1.
+- `support_middle_text`: middle segment between highlights.
+- `support_highlight_secondary_text`: highlighted segment 2.
+- `support_suffix_text`: closing segment for secondary paragraph.
+- `estimated_time_text`: text shown beside clock icon.
+- `start_button_text`: CTA label for idle state.
+- `loading_button_text`: CTA label while config is loading.
+
+Fallback behavior:
+
+- Missing or empty values are normalized to safe defaults.
+- This keeps compatibility with existing forms that do not define `intro_screen`.
 
 ## Completion Action
 
@@ -385,6 +439,7 @@ Supported operators:
 - Show placeholder editor for text-like and masked inputs.
 - Show mask override editor only when `mask_preset` exists.
 - For `price`, include slider editor (`min`, `max`, `step`, `prefix`, `unitSuffix`, `confirmLabel`, `marks`).
+- Include a dedicated editor for `intro_screen` and expose a live preview for the start screen.
 - Provide a final action editor for `completion_action` with two modes: redirect and embed.
 - Keep `id` immutable once responses exist in production.
 - Store config versions and migration notes when introducing new presets.
