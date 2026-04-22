@@ -8,9 +8,6 @@ RUN npm ci
 
 # ─────────────────────────────────────────────
 # Stage 2: build Astro standalone server
-# PUBLIC_API_URL is embedded at build time for
-# client-side JS; override with --build-arg for
-# each environment.
 # ─────────────────────────────────────────────
 FROM node:22-alpine AS builder
 WORKDIR /app
@@ -28,6 +25,8 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 
+RUN apk add --no-cache curl
+
 RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid 1001 astro
 
@@ -43,7 +42,7 @@ ENV NODE_ENV=production \
 
 EXPOSE 4321
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://localhost:4321/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:4321/ || exit 1
 
 CMD ["sh", "-c", "HOST=0.0.0.0 PORT=4321 node ./dist/server/entry.mjs"]
