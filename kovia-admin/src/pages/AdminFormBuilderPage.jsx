@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Breadcrumbs, Button, Card, Input, Modal, ScrollShadow, Spinner, Switch, Tabs } from '@heroui/react';
+import { AlertDialog, Breadcrumbs, Button, Card, Dropdown, Input, Label, Modal, ScrollShadow, Separator, Spinner, Switch, Tabs } from '@heroui/react';
 import { archiveFormSubmissions, deleteForm, exportForm, getFormById, importForm, updateForm, validateFormConfig } from '../lib/admin/forms';
 import { formConfigSchema } from '../lib/admin/schemas';
 import { notifyError, notifySuccess } from '../lib/ui/notifications';
@@ -10,16 +10,16 @@ import { notifyError, notifySuccess } from '../lib/ui/notifications';
 const OPTION_BASED_TYPES = new Set(['radio', 'checkbox', 'select']);
 
 const FIELD_TYPE_META = {
-  text:        { label: 'Texto',             placeholder: 'Escribe tu respuesta',           icon: '✏️' },
-  textarea:    { label: 'Texto largo',        placeholder: 'Escribe tu respuesta detallada', icon: '📝' },
-  email:       { label: 'Correo',             placeholder: 'nombre@empresa.com',             icon: '✉️' },
-  telefono:    { label: 'Teléfono',           placeholder: '77771234',                       icon: '📞' },
-  radio:       { label: 'Selección única',    placeholder: '',                               icon: '⚪' },
-  checkbox:    { label: 'Selección múltiple', placeholder: '',                               icon: '☑️' },
-  select:      { label: 'Lista desplegable',  placeholder: '',                               icon: '▾'  },
-  date:        { label: 'Fecha',              placeholder: 'YYYY-MM-DD',                     icon: '📅' },
-  'date-time': { label: 'Fecha y hora',       placeholder: 'YYYY-MM-DD HH:mm',              icon: '🕐' },
-  price:       { label: 'Precio',             placeholder: '0.00',                           icon: '💲' },
+  text:        { label: 'Texto',             short: 'Texto',   placeholder: 'Escribe tu respuesta',           icon: '✏️' },
+  textarea:    { label: 'Texto largo',        short: 'Párrafo', placeholder: 'Escribe tu respuesta detallada', icon: '📝' },
+  email:       { label: 'Correo',             short: 'Email',   placeholder: 'nombre@empresa.com',             icon: '✉️' },
+  telefono:    { label: 'Teléfono',           short: 'Tel.',    placeholder: '77771234',                       icon: '📞' },
+  radio:       { label: 'Selección única',    short: 'Radio',   placeholder: '',                               icon: '⚪' },
+  checkbox:    { label: 'Selección múltiple', short: 'Check',   placeholder: '',                               icon: '☑️' },
+  select:      { label: 'Lista desplegable',  short: 'Select',  placeholder: '',                               icon: '▾'  },
+  date:        { label: 'Fecha',              short: 'Fecha',   placeholder: 'YYYY-MM-DD',                     icon: '📅' },
+  'date-time': { label: 'Fecha y hora',       short: 'F+Hora',  placeholder: 'YYYY-MM-DD HH:mm',              icon: '🕐' },
+  price:       { label: 'Precio',             short: 'Precio',  placeholder: '0.00',                           icon: '💲' },
 };
 
 const QUESTION_TYPE_OPTIONS = Object.keys(FIELD_TYPE_META);
@@ -270,8 +270,22 @@ function normalizeQuestion(question, index) {
       ? question.options.map((v) => String(v || '').trim()).filter(Boolean)
       : [];
     base.options = options.length > 0 ? options : ['Opción 1', 'Opción 2'];
+
+    // Keep enum z-rule in sync with current options
+    const zRules = Array.isArray(base.validation?.z) ? [...base.validation.z] : [];
+    const enumIdx = zRules.findIndex((r) => r?.rule === 'enum');
+    if (enumIdx >= 0) {
+      zRules[enumIdx] = { ...zRules[enumIdx], options: [...base.options] };
+    } else {
+      zRules.push({ rule: 'enum', message: 'Selecciona una opción válida', options: [...base.options] });
+    }
+    base.validation = { ...(base.validation || { z: [] }), z: zRules };
   } else {
     delete base.options;
+    // Remove stale enum rule when field is not option-based
+    if (Array.isArray(base.validation?.z) && base.validation.z.some((r) => r?.rule === 'enum')) {
+      base.validation = { ...base.validation, z: base.validation.z.filter((r) => r?.rule !== 'enum') };
+    }
   }
 
   if (base.type === 'price' && question?.slider && typeof question.slider === 'object') {
@@ -353,44 +367,77 @@ function PreviewQuestion({ question, isSelected, onSelect }) {
       type="button"
       onClick={onSelect}
       className={[
-        'w-full text-left rounded-lg border-2 px-3 py-2.5 transition-all group',
+        'w-full text-left rounded-xl border transition-all group relative overflow-hidden',
         isSelected
-          ? 'border-primary bg-primary/5 shadow-sm'
-          : 'border-transparent hover:border-default-200 hover:bg-default-50',
+          ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/15'
+          : 'border-default-200 hover:border-primary/30 hover:bg-default-50',
       ].join(' ')}
     >
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm shrink-0">{meta.icon}</span>
-          <span className="text-sm font-medium text-default-800 truncate flex-1">
-            {question.label}
-            {question.required && <span className="text-danger ml-1 font-bold">*</span>}
-          </span>
+      {/* Left accent strip */}
+      <span
+        aria-hidden="true"
+        className={[
+          'absolute inset-y-0 left-0 w-0.75 transition-opacity',
+          isSelected
+            ? 'bg-primary opacity-100'
+            : 'bg-primary/40 opacity-0 group-hover:opacity-100',
+        ].join(' ')}
+      />
+
+      <div className="pl-4 pr-3 py-2.5 flex flex-col gap-1.5">
+        {/* Top row: type chip · required badge · edit indicator */}
+        <div className="flex items-center gap-1.5 min-w-0">
           <span className={[
-            'text-xs px-1.5 py-0.5 rounded-full shrink-0 transition-all',
+            'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border shrink-0 leading-none',
             isSelected
-              ? 'bg-primary/10 text-primary opacity-100'
-              : 'opacity-0 group-hover:opacity-70 bg-default-100 text-default-500',
+              ? 'bg-primary/10 text-primary border-primary/30'
+              : 'bg-default-100 text-default-500 border-default-200',
           ].join(' ')}>
-            {isSelected ? 'Editando' : 'Editar'}
+            <span>{meta.icon}</span>
+            <span>{meta.short}</span>
+          </span>
+
+          {question.required && (
+            <span className="text-[9px] font-bold text-danger bg-danger/8 px-1.5 py-0.5 rounded border border-danger-soft shrink-0 leading-none">
+              req
+            </span>
+          )}
+
+          <span className={[
+            'ml-auto text-[10px] font-medium shrink-0 transition-all',
+            isSelected
+              ? 'text-primary opacity-100'
+              : 'text-default-400 opacity-0 group-hover:opacity-100',
+          ].join(' ')}>
+            {isSelected ? '✎ editando' : 'editar →'}
           </span>
         </div>
 
+        {/* Question label */}
+        <p className="text-sm font-semibold text-default-800 truncate leading-snug">
+          {question.label}
+        </p>
+
+        {/* Options preview as pills / placeholder text */}
         {shouldUseOptions(question.type) && Array.isArray(question.options) ? (
-          <div className="flex flex-col gap-1 pl-6">
+          <div className="flex flex-wrap gap-1">
             {question.options.slice(0, 3).map((opt) => (
-              <span key={opt} className="text-xs text-default-500 flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full border border-default-300 shrink-0" />
+              <span
+                key={opt}
+                className="text-[10px] bg-default-100 text-default-500 px-2 py-0.5 rounded-full border border-default-200 truncate max-w-32.5 leading-none"
+              >
                 {opt}
               </span>
             ))}
             {question.options.length > 3 && (
-              <span className="text-xs text-default-400 pl-4">+{question.options.length - 3} más…</span>
+              <span className="text-[10px] text-default-400 px-1 leading-none self-center">
+                +{question.options.length - 3}
+              </span>
             )}
           </div>
         ) : (
-          <p className="pl-6 text-xs text-default-400 italic truncate">
-            {question.placeholder || meta.placeholder || meta.label}
+          <p className="text-xs text-default-400 italic truncate leading-snug">
+            {question.placeholder || meta.placeholder || '—'}
           </p>
         )}
       </div>
@@ -401,11 +448,22 @@ function PreviewQuestion({ question, isSelected, onSelect }) {
 // ─── FieldEditor — panel derecho de edición ───────────────────────────────────
 
 function FieldEditor({ question, onUpdate, onRemove }) {
+  const [labelDraft,       setLabelDraft]       = useState(question?.label ?? '');
+  const [placeholderDraft, setPlaceholderDraft] = useState(question?.placeholder ?? '');
+  const [optionsDraft,     setOptionsDraft]     = useState(
+    Array.isArray(question?.options) ? question.options.join(', ') : ''
+  );
   const [questionJsonDraft, setQuestionJsonDraft] = useState('');
 
+  // Sync all drafts when a different question is selected or when its type changes
+  // (type change resets options so we need to re-read them from the normalized question)
   useEffect(() => {
+    setLabelDraft(question?.label ?? '');
+    setPlaceholderDraft(question?.placeholder ?? '');
+    setOptionsDraft(Array.isArray(question?.options) ? question.options.join(', ') : '');
     setQuestionJsonDraft(question ? safeStringify(question) : '');
-  }, [question?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question?.id, question?.type]);
 
   function applyQuestionJsonDraft() {
     try {
@@ -420,12 +478,14 @@ function FieldEditor({ question, onUpdate, onRemove }) {
 
   if (!question) {
     return (
-      <div className="flex flex-col items-center justify-center h-full py-16 gap-3 text-default-400 text-center">
-        <span className="text-4xl">👆</span>
-        <p className="text-sm font-medium text-default-600">Selecciona un campo</p>
-        <p className="text-xs max-w-50 leading-relaxed">
-          Haz clic en cualquier campo de la izquierda para ver y editar sus propiedades aquí
-        </p>
+      <div className="flex flex-col items-center justify-center h-full py-12 px-4">
+        <div className="flex flex-col items-center gap-3 text-center rounded-2xl border-2 border-dashed border-default-200 px-8 py-10 w-full max-w-xs">
+          <span className="text-4xl opacity-30 select-none">◎</span>
+          <p className="text-sm font-semibold text-default-500">Sin campo seleccionado</p>
+          <p className="text-xs text-default-400 leading-relaxed">
+            Haz clic en cualquier campo del panel izquierdo para editar sus propiedades
+          </p>
+        </div>
       </div>
     );
   }
@@ -477,12 +537,15 @@ function FieldEditor({ question, onUpdate, onRemove }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xl shrink-0">{getTypeMeta(selectedQuestionType).icon}</span>
+      <div className="flex items-center justify-between gap-2 pb-3 border-b border-default-200">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="text-2xl shrink-0 leading-none">{getTypeMeta(selectedQuestionType).icon}</span>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-default-800 truncate">{question.label}</p>
-            <p className="text-xs text-default-400">{getTypeMeta(selectedQuestionType).label}</p>
+            <p className="text-sm font-bold text-default-800 truncate">{question.label}</p>
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-default-400 uppercase tracking-wide">
+              <span>{getTypeMeta(selectedQuestionType).label}</span>
+              {question.required && <span className="text-danger">· requerido</span>}
+            </span>
           </div>
         </div>
         <Button size="sm" variant="ghost" color="danger" onPress={onRemove}>Eliminar</Button>
@@ -491,31 +554,57 @@ function FieldEditor({ question, onUpdate, onRemove }) {
       <FieldRow label="Etiqueta visible">
         <input
           className="kovia-input"
-          value={question.label || ''}
-          onChange={(e) => onUpdate({ label: e.target.value })}
+          value={labelDraft}
+          onChange={(e) => setLabelDraft(e.target.value)}
+          onBlur={() => {
+            const trimmed = labelDraft.trim();
+            if (!trimmed) {
+              setLabelDraft(question?.label ?? '');
+            } else {
+              onUpdate({ label: trimmed });
+            }
+          }}
         />
       </FieldRow>
 
       <FieldRow label="Tipo de campo">
-        <select
-          className="kovia-select"
-          value={selectedQuestionType}
-          onChange={(e) => onUpdate({ type: e.target.value })}
-        >
-          {QUESTION_TYPE_OPTIONS.map((type) => (
-            <option key={type} value={type}>
-              {getTypeMeta(type).icon}  {getTypeMeta(type).label}
-            </option>
-          ))}
-        </select>
+        <div className="grid grid-cols-5 gap-1">
+          {QUESTION_TYPE_OPTIONS.map((type) => {
+            const tm = getTypeMeta(type);
+            const isActive = selectedQuestionType === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                title={tm.label}
+                onClick={() => onUpdate({ type })}
+                className={[
+                  'flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg border text-center transition-all',
+                  isActive
+                    ? 'border-primary bg-primary/8 text-primary shadow-sm'
+                    : 'border-default-200 hover:border-primary/40 hover:bg-default-50 text-default-500 hover:text-default-700',
+                ].join(' ')}
+              >
+                <span className="text-base leading-none">{tm.icon}</span>
+                <span className="text-[9px] font-semibold leading-tight">{tm.short}</span>
+              </button>
+            );
+          })}
+        </div>
       </FieldRow>
 
       <div className="grid grid-cols-2 gap-3">
         <FieldRow label="Placeholder">
           <input
             className="kovia-input"
-            value={question.placeholder || ''}
-            onChange={(e) => onUpdate({ placeholder: e.target.value })}
+            value={placeholderDraft}
+            onChange={(e) => setPlaceholderDraft(e.target.value)}
+            onBlur={() => {
+              const trimmed = placeholderDraft.trim();
+              if (trimmed !== (question?.placeholder ?? '')) {
+                onUpdate({ placeholder: trimmed });
+              }
+            }}
             placeholder={getTypeMeta(selectedQuestionType).placeholder}
           />
         </FieldRow>
@@ -559,10 +648,16 @@ function FieldEditor({ question, onUpdate, onRemove }) {
         <FieldRow label="Opciones" hint="Separadas por coma">
           <input
             className="kovia-input"
-            value={Array.isArray(question.options) ? question.options.join(', ') : ''}
-            onChange={(e) => {
-              const options = e.target.value.split(',').map((v) => v.trim()).filter(Boolean);
-              onUpdate({ options });
+            value={optionsDraft}
+            onChange={(e) => setOptionsDraft(e.target.value)}
+            onBlur={() => {
+              const options = optionsDraft.split(',').map((v) => v.trim()).filter(Boolean);
+              if (options.length === 0) {
+                setOptionsDraft(Array.isArray(question?.options) ? question.options.join(', ') : '');
+              } else {
+                setOptionsDraft(options.join(', '));
+                onUpdate({ options });
+              }
             }}
             placeholder="Opción 1, Opción 2, Opción 3"
           />
@@ -1355,6 +1450,30 @@ export default function AdminFormBuilderPage() {
   const [showIntroScreen, setShowIntroScreen] = useState(false);
   const [showJson,     setShowJson]     = useState(false);
   const [showEmbed,    setShowEmbed]    = useState(false);
+  const [isDirty,            setIsDirty]            = useState(false);
+  const [showUnsavedDialog,  setShowUnsavedDialog]  = useState(false);
+  const [showArchiveDialog,  setShowArchiveDialog]  = useState(false);
+  const [showDeleteDialog,   setShowDeleteDialog]   = useState(false);
+
+  // ── Unsaved-changes guard ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    function onBeforeUnload(e) {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    }
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
+
+  function handleGoBack() {
+    if (isDirty) {
+      setShowUnsavedDialog(true);
+    } else {
+      navigate(`/forms/${templateId}`);
+    }
+  }
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -1369,6 +1488,7 @@ export default function AdminFormBuilderPage() {
         setFormMeta(form);
         setConfig(normalized);
         setJsonDraft(safeStringify(normalized));
+        setIsDirty(false);
         if (normalized.steps.length > 0) setSelectedStepKey(String(normalized.steps[0].order));
       } catch (err) {
         if (!cancelled) notifyError(err?.message || 'No se pudieron cargar los datos del formulario.');
@@ -1397,6 +1517,7 @@ export default function AdminFormBuilderPage() {
   function syncJson(nextConfig) {
     setConfig(nextConfig);
     setJsonDraft(safeStringify(nextConfig));
+    setIsDirty(true);
   }
 
   function updateCompletionAction(patch) {
@@ -1479,6 +1600,7 @@ export default function AdminFormBuilderPage() {
       const normalized = normalizeConfigForEditor(validated);
       setConfig(normalized);
       setJsonDraft(safeStringify(normalized));
+      setIsDirty(true);
       notifySuccess('JSON aplicado correctamente.');
     } catch (err) {
       notifyError(err?.message || 'JSON inválido.');
@@ -1497,6 +1619,7 @@ export default function AdminFormBuilderPage() {
         const norm    = normalizeConfigForEditor(formConfigSchema.parse(payload));
         setConfig(norm);
         setJsonDraft(safeStringify(norm));
+        setIsDirty(true);
         notifySuccess('Archivo JSON importado correctamente.');
       } catch (err) { notifyError(err?.message || 'Archivo JSON inválido.'); }
     };
@@ -1526,6 +1649,7 @@ export default function AdminFormBuilderPage() {
       const norm   = normalizeConfigForEditor(saved.config);
       setConfig(norm);
       setJsonDraft(safeStringify(norm));
+      setIsDirty(false);
       notifySuccess('Formulario guardado correctamente.');
     } catch (err) { notifyError(err?.message || 'Error al guardar.'); }
     finally { setIsSaving(false); }
@@ -1548,10 +1672,12 @@ export default function AdminFormBuilderPage() {
     } catch (err) { notifyError(err?.message || 'Error al importar.'); }
   }
 
-  async function handleArchiveResponses() {
-    const confirmed = window.confirm('¿Deseas archivar todas las respuestas de este formulario? Esta acción oculta las respuestas de los listados.');
-    if (!confirmed) return;
+  function handleArchiveResponses() {
+    setShowArchiveDialog(true);
+  }
 
+  async function confirmArchiveResponses() {
+    setShowArchiveDialog(false);
     setIsArchiving(true);
     try {
       const result = await archiveFormSubmissions(formId);
@@ -1564,14 +1690,17 @@ export default function AdminFormBuilderPage() {
     }
   }
 
-  async function handleDeleteForm() {
-    const confirmed = window.confirm('¿Deseas desactivar este formulario? Podrás volver a activarlo después si lo editas.');
-    if (!confirmed) return;
+  function handleDeleteForm() {
+    setShowDeleteDialog(true);
+  }
 
+  async function confirmDeleteForm() {
+    setShowDeleteDialog(false);
     setIsDeleting(true);
     try {
       await deleteForm(formId);
       notifySuccess('Formulario desactivado correctamente.');
+      setIsDirty(false);
       navigate(`/forms/${templateId}`);
     } catch (err) {
       notifyError(err, 'No se pudo desactivar el formulario.');
@@ -1611,29 +1740,76 @@ export default function AdminFormBuilderPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button as={Link} size="sm" variant="ghost" to={`/forms/${templateId}`}>← Volver</Button>
-          <Button size="sm" variant="secondary" onPress={() => setShowJson(true)}>{'</>'} JSON</Button>
-          <Button size="sm" variant="secondary" onPress={() => setShowEmbed(true)}>🔗 Embed</Button>
-          <Button size="sm" variant="secondary" onPress={() => setShowIntroScreen(true)}>🪄 Inicio</Button>
-          <Button size="sm" variant="secondary" onPress={() => setShowSettings(true)}>⚙️ Ajustes</Button>
-          <Button
-            size="sm"
-            color="danger"
-            variant="ghost"
-            isDisabled={isArchiving || isDeleting}
-            onPress={handleArchiveResponses}
-          >
-            {isArchiving ? 'Archivando…' : 'Archivar respuestas'}
-          </Button>
-          <Button
-            size="sm"
-            color="danger"
-            variant="secondary"
-            isDisabled={isDeleting || isArchiving}
-            onPress={handleDeleteForm}
-          >
-            {isDeleting ? 'Desactivando…' : 'Eliminar formulario'}
-          </Button>
+          <Button size="sm" variant="ghost" onPress={handleGoBack}>← Volver</Button>
+
+          {/* Vista: JSON editor + Embed */}
+          <Dropdown>
+            <Button size="sm" variant="secondary">Vista ▾</Button>
+            <Dropdown.Popover>
+              <Dropdown.Menu
+                onAction={(key) => {
+                  if (key === 'json')  setShowJson(true);
+                  if (key === 'embed') setShowEmbed(true);
+                }}
+              >
+                <Dropdown.Item id="json" textValue="Editor JSON">
+                  <Label>{'</>'} Editor JSON</Label>
+                </Dropdown.Item>
+                <Dropdown.Item id="embed" textValue="Código embed">
+                  <Label>🔗 Código embed</Label>
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+
+          {/* Configurar: Pantalla inicio + Ajustes avanzados */}
+          <Dropdown>
+            <Button size="sm" variant="secondary">Configurar ▾</Button>
+            <Dropdown.Popover>
+              <Dropdown.Menu
+                onAction={(key) => {
+                  if (key === 'intro')    setShowIntroScreen(true);
+                  if (key === 'settings') setShowSettings(true);
+                }}
+              >
+                <Dropdown.Item id="intro" textValue="Pantalla de inicio">
+                  <Label>🪄 Pantalla de inicio</Label>
+                </Dropdown.Item>
+                <Dropdown.Item id="settings" textValue="Ajustes avanzados">
+                  <Label>⚙️ Ajustes avanzados</Label>
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+
+          {/* Acciones destructivas */}
+          <Dropdown>
+            <Button
+              size="sm"
+              color="danger"
+              variant="ghost"
+              isDisabled={isArchiving || isDeleting}
+            >
+              {isArchiving ? 'Archivando…' : isDeleting ? 'Eliminando…' : '⚠ Acciones ▾'}
+            </Button>
+            <Dropdown.Popover>
+              <Dropdown.Menu
+                onAction={(key) => {
+                  if (key === 'archive') handleArchiveResponses();
+                  if (key === 'delete')  handleDeleteForm();
+                }}
+              >
+                <Dropdown.Item id="archive" textValue="Archivar respuestas">
+                  <Label>Archivar respuestas</Label>
+                </Dropdown.Item>
+                <Separator />
+                <Dropdown.Item id="delete" textValue="Eliminar formulario" variant="danger">
+                  <Label>Eliminar formulario</Label>
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+
           <Button size="sm" variant="secondary" isDisabled={isValidating} onPress={validateBuilderRules}>
             {isValidating ? 'Validando…' : '✓ Validar'}
           </Button>
@@ -1702,7 +1878,7 @@ export default function AdminFormBuilderPage() {
               {/* Panels */}
               {steps.map((step, stepIdx) => (
                 <Tabs.Panel key={String(step.order)} id={String(step.order)} className="p-0">
-                  <div className="grid min-h-130 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="grid min-h-130 grid-cols-1 lg:grid-cols-2">
 
                     {/* Izquierda: título del paso + campos como vista previa clickeable */}
                     <div className="flex flex-col gap-3 p-4 border-r border-default-200 overflow-y-auto">
@@ -1809,6 +1985,90 @@ export default function AdminFormBuilderPage() {
         formTitle={formMeta?.title}
         suggestedHeight={toFiniteNumber(config?.completion_action?.embed_height, 920)}
       />
+
+      {/* Archivar respuestas */}
+      <AlertDialog.Backdrop
+        isOpen={showArchiveDialog}
+        onOpenChange={(open) => { if (!open) setShowArchiveDialog(false); }}
+      >
+        <AlertDialog.Container placement="center" size="sm">
+          <AlertDialog.Dialog>
+            <AlertDialog.Header>
+              <AlertDialog.Icon status="warning" />
+              <AlertDialog.Heading>¿Archivar todas las respuestas?</AlertDialog.Heading>
+            </AlertDialog.Header>
+            <AlertDialog.Body>
+              <p className="text-sm text-default-600">
+                Las respuestas de este formulario quedarán ocultas en los listados. Esta acción se puede revertir reactivando las respuestas desde el panel de administración.
+              </p>
+            </AlertDialog.Body>
+            <AlertDialog.Footer>
+              <Button variant="tertiary" onPress={() => setShowArchiveDialog(false)}>
+                Cancelar
+              </Button>
+              <Button color="danger" variant="secondary" isDisabled={isArchiving} onPress={confirmArchiveResponses}>
+                {isArchiving ? 'Archivando…' : 'Archivar respuestas'}
+              </Button>
+            </AlertDialog.Footer>
+          </AlertDialog.Dialog>
+        </AlertDialog.Container>
+      </AlertDialog.Backdrop>
+
+      {/* Eliminar formulario */}
+      <AlertDialog.Backdrop
+        isOpen={showDeleteDialog}
+        onOpenChange={(open) => { if (!open) setShowDeleteDialog(false); }}
+      >
+        <AlertDialog.Container placement="center" size="sm">
+          <AlertDialog.Dialog>
+            <AlertDialog.Header>
+              <AlertDialog.Icon status="danger" />
+              <AlertDialog.Heading>¿Desactivar el formulario?</AlertDialog.Heading>
+            </AlertDialog.Header>
+            <AlertDialog.Body>
+              <p className="text-sm text-default-600">
+                El formulario dejará de estar disponible para nuevos envíos. Podrás volver a activarlo editándolo desde el panel de administración.
+              </p>
+            </AlertDialog.Body>
+            <AlertDialog.Footer>
+              <Button variant="tertiary" onPress={() => setShowDeleteDialog(false)}>
+                Cancelar
+              </Button>
+              <Button color="danger" variant="secondary" isDisabled={isDeleting} onPress={confirmDeleteForm}>
+                {isDeleting ? 'Desactivando…' : 'Desactivar formulario'}
+              </Button>
+            </AlertDialog.Footer>
+          </AlertDialog.Dialog>
+        </AlertDialog.Container>
+      </AlertDialog.Backdrop>
+
+      {/* Guardia de cambios sin guardar */}
+      <AlertDialog.Backdrop
+        isOpen={showUnsavedDialog}
+        onOpenChange={(open) => { if (!open) setShowUnsavedDialog(false); }}
+      >
+        <AlertDialog.Container placement="center" size="sm">
+          <AlertDialog.Dialog>
+            <AlertDialog.Header>
+              <AlertDialog.Icon status="warning" />
+              <AlertDialog.Heading>¿Salir sin guardar?</AlertDialog.Heading>
+            </AlertDialog.Header>
+            <AlertDialog.Body>
+              <p className="text-sm text-default-600">
+                Tienes cambios sin guardar en el formulario. Si sales ahora perderás todo lo que editaste desde el último guardado.
+              </p>
+            </AlertDialog.Body>
+            <AlertDialog.Footer>
+              <Button variant="tertiary" onPress={() => setShowUnsavedDialog(false)}>
+                Quedarme
+              </Button>
+              <Button color="danger" variant="secondary" onPress={() => { setIsDirty(false); navigate(`/forms/${templateId}`); }}>
+                Salir sin guardar
+              </Button>
+            </AlertDialog.Footer>
+          </AlertDialog.Dialog>
+        </AlertDialog.Container>
+      </AlertDialog.Backdrop>
     </div>
   );
 }
