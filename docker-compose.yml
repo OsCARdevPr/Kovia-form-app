@@ -55,12 +55,6 @@ services:
       PUBLIC_API_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL es obligatorio}
     expose:
       - "4321"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.kovia-form.rule=Host(`form.oscardev.software`)"
-      - "traefik.http.routers.kovia-form.entrypoints=websecure"
-      - "traefik.http.routers.kovia-form.tls.certresolver=letsencrypt"
-      - "traefik.http.services.kovia-form.loadbalancer.server.port=4321"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://172.23.0.4:4321/ || exit 1"]
       interval: 30s
