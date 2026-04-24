@@ -49,9 +49,12 @@ app.use(aiRateLimiter);
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      console.log(`[CORS] ✅ Solicitud permitida desde: ${origin || 'sin origin'}`);
       return callback(null, true);
     }
 
+    console.warn(`[CORS] ❌ Solicitud bloqueada desde origen no permitido: ${origin}`);
+    console.warn(`[CORS] Orígenes permitidos: ${allowedOrigins.join(', ')}`);
     return callback(null, false);
   },
   credentials: true,
